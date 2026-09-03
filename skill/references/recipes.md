@@ -7,12 +7,14 @@ description: >
   per-row list controls (selection + persistence + bulk save), reserved
   theme class names, MasterDetail, icon+label link wrapping, appearance
   resets, external fonts, and more. Read this BEFORE writing a Mentor
-  prompt whenever the wave's scope matches one of these patterns — each
+  prompt whenever the wave's scope matches one of these patterns, AND
+  before investigating any live bug from scratch — most recipes here came
+  from debugging an already-built app, not from wave planning. Each
   recipe already encodes the two-part fix that a natural-language
   description of the same pattern tends to drop, so the prompt doesn't
-  rediscover it turn by turn. Companion to `prototype-to-widgets.md`
-  (which explains *why* each gap happens) — this file is *what to say* to
-  avoid it happening at all.
+  rediscover it turn by turn. Companion to `prototype-to-widgets.md` and
+  `backend-and-data-gotchas.md` (which explain *why* each gap happens) —
+  this file is *what to say* to avoid it happening at all.
 ---
 
 # OutSystems recipes: prompt text that avoids known failure modes
@@ -453,7 +455,7 @@ binding's write to the list row has not finished by the time `OnChange`'s
 parameters are evaluated for later rows. Row 1 passing this recipe's
 two-row verification is possible without it actually working, if row 1
 already had a prior saved value equal to whatever you click during the
-test. See `prototype-to-widgets.md` lesson #25 for the full mechanism and
+test. See `prototype-to-widgets.md` lesson #23 for the full mechanism and
 the two accepted fixes (batch-save-on-explicit-action, preferred; or a
 native-DOM-event JS bridge) — do **not** default to replacing the native
 `RadioButton` with a styled `Button` to route around this, that trades
@@ -633,6 +635,58 @@ return exactly 1 record with `Ativa = True` and `Count(filhos) > 0`.
 
 ---
 
+## Recipe: wipe and recreate ALL test data periodically, not just when something is already broken
+
+**When to use:** as a standing practice once a project has any destructive
+or state-mutating test wave (item inactivation, version publishing, status
+transitions) — not only as an emergency recovery step. This is broader
+than the single-entity reset recipe above: that one repairs *one* entity's
+active-version pointer; this one clears every transactional record the
+E2E suite creates (Consultas, Auditorias, Respostas, Documentos, or your
+project's equivalents), leaving reference/seed data (Fichas, Protocolos)
+untouched.
+
+**The trap this avoids:** transactional test data accumulates silently
+across every session — dozens of half-finished records, records created
+by a debugging session before a fix landed, records left behind by a test
+run that crashed partway through. Two costs compound over time: (1) a
+live bug investigation cannot easily tell "is this failing because of a
+real code bug, or because the data underneath it is already corrupt from
+an earlier session" — the two look identical from the UI, and untangling
+them by inspection burns far more time than a wipe would; (2) as
+functionality evolves, records created under an OLD data shape or an OLD
+business rule linger and quietly violate assumptions a NEW flow makes,
+producing bugs that have nothing to do with the new code itself.
+
+**Prompt block:**
+```
+Criar server action "WipeAllTestData" (sem inputs; Outputs:
+<Entity1>Apagadas, <Entity2>Apagados, ... Long Integer, ErrorMessage
+Text) que apaga em cascata, na ordem correta de dependência (filhos
+antes de pais), TODOS os registros de <lista de entidades
+transacionais>. NÃO apagar <lista de entidades de referência/seed:
+Ficha, FichaVersao, ItemFicha, Protocolo, ...>. Contar cada entidade
+antes de apagar e devolver a contagem em cada output. Expor via um
+botão vermelho/destrutivo numa área "Dev"/"Utilitários" (ver lição
+sobre ferramentas de manutenção permanentes), com texto deixando claro
+que a ação é irreversível.
+```
+
+**When to actually run it:** (a) whenever a bug's symptoms are ambiguous
+between "code regression" and "corrupt data from a prior session" — run
+it and re-test on a clean slate before spending another investigation
+round on the code; (b) periodically as a project matures, not only when
+something is visibly broken — treat it the same way you'd treat clearing
+a build cache, a routine reset rather than a rescue operation.
+
+**Verify:** after wiping, re-run the full E2E suite once with a fresh
+seed (see the reset recipe above, if the project has one) before drawing
+any conclusion about whether a bug is fixed — a suite that behaves
+differently on clean data than it did before the wipe is strong evidence
+the earlier failures were data-shaped, not code-shaped.
+
+---
+
 ## Recipe: entity with two redundant "active/status" fields — keep every writer in sync
 
 **When to use:** any entity that represents versioning/activation state with
@@ -641,34 +695,55 @@ BOTH a Boolean flag (e.g., `Ativa`) AND a static-entity `Status` reference
 wave adds a boolean shortcut alongside a status field an earlier wave
 already established, or vice-versa.
 
-**The trap this avoids:** a NEW server action (built in a later wave) reads
-the spec literally and sets only the field the spec's prose emphasizes
-(e.g., "Ativa = True"), while an EXISTING server action from an earlier
-wave (e.g., `OpenAuditoria`) filters by the OTHER field (`Status =
-Entities.StatusFichaVersao.Ativa`). Both actions publish cleanly with 0
-validation errors — there is no compile-time link between the two fields,
-so nothing catches the mismatch. The new action's own screen/tests can
-pass completely (they only read the boolean), while every OTHER flow that
-depends on the entity's active record silently breaks — with a real error
-message it own screen never surfaces on. This was discovered in W15:
-`PublishFichaVersao` set `Ativa = True` but left `Status` null/stale;
-`OpenAuditoria` (built in an earlier wave) filtered by `Status`, so every
-version created by the edit flow was invisible to it — blocking every
-downstream wave that opens an auditoria (W7 through W18) with no failure
-visible in W15's own tests.
+**The trap this avoids — two different mechanisms, same symptom:**
+
+1. **A new writer skips a field a spec's prose didn't mention.** A NEW
+   server action (built in a later wave) reads the spec literally and sets
+   only the field the spec's prose emphasizes (e.g., "Ativa = True"), while
+   an EXISTING server action from an earlier wave (e.g., `OpenAuditoria`)
+   filters by the OTHER field (`Status = Entities.StatusFichaVersao.Ativa`).
+   Both actions publish cleanly with 0 validation errors — there is no
+   compile-time link between the two fields, so nothing catches the
+   mismatch. Discovered in W15: `PublishFichaVersao` set `Ativa = True` but
+   left `Status` null/stale; `OpenAuditoria` filtered by `Status`, so every
+   version created by the edit flow was invisible to it — blocking every
+   downstream wave that opens an auditoria (W7 through W18) with no failure
+   visible in W15's own tests.
+2. **The two fields drift apart over time as more writers accumulate —
+   no single action is "wrong," the reader just never noticed it depends
+   on the field nobody actively maintains.** A query written early (e.g.
+   `GetFichaVersaoAtiva`, built before the entity had more than one writer)
+   filters on `Status`. Months later, several *different* writers appear —
+   a reseed utility, a "create new Ficha" flow, an admin edit screen — and
+   every one of them sets `Ativa` (the field that reads naturally as "the
+   real one") without anyone re-checking what the original query actually
+   filters on. Each new writer publishes clean, its own screen works, and
+   `Status` silently stops being kept current by anyone. The failure isn't
+   visible until a consumer created *after* all of this (e.g. a screen
+   listing multiple active-looking versions) exposes that the "active"
+   record the old query resolves to isn't the one any current writer
+   thinks is active. This is harder to catch than case 1 because there is
+   no single suspect commit — `git blame`/session history won't point at
+   one action that "broke" it; the query was arguably correct when written
+   and became wrong by accretion.
 
 **Prompt block (BEFORE writing an action that activates/deactivates a
-versioned entity):**
+versioned entity, OR before debugging why "the active version" a query
+returns doesn't match what the UI shows as active):**
 ```
-Antes de implementar "<ServerAction>", verificar TODOS os campos que
-"<Entidade>" usa para indicar estado ativo/versão corrente — não assumir
-que existe um único campo. Se houver mais de um (ex.: um Boolean E um
-Status de entidade estática), a ação deve escrever AMBOS sempre que
-ativar ou desativar um registro, no mesmo Assign, nunca só um. Além
-disso, localizar toda outra server action existente no módulo que já lê
-esse estado (grep por "Ativa" e por "Status" nas actions do módulo) e
-confirmar qual campo ela usa — replicar exatamente esse campo, não o que
-a spec da wave atual menciona primeiro.
+Antes de implementar/depurar "<ServerAction>", verificar TODOS os campos
+que "<Entidade>" usa para indicar estado ativo/versão corrente — não
+assumir que existe um único campo. Se houver mais de um (ex.: um Boolean
+E um Status de entidade estática):
+1. Se está ESCREVENDO um novo writer: escrever AMBOS os campos sempre
+   que ativar ou desativar um registro, no mesmo Assign, nunca só um.
+2. Se está DEPURANDO um comportamento de "versão errada sendo usada":
+   liste TODOS os writers da entidade no módulo inteiro (grep por
+   "Ativa" e por "Status" nas actions), não só o mais recente — o writer
+   culpado pode ser um utilitário antigo que ninguém tocou nesta sessão.
+   Confirme qual campo cada writer realmente escreve, e qual campo cada
+   leitor realmente filtra, antes de assumir que a correção é em um só
+   lugar.
 ```
 
 **Verify after publish:** don't just test the NEW screen/flow in
@@ -677,7 +752,10 @@ same entity's active record — e.g., after publishing a "create new
 version" feature, actually open a downstream flow that consumes the
 active version, not just re-check the new screen's own happy path. A
 green result on the new wave's own tests is not evidence the entity's
-consumers still work.
+consumers still work. When debugging (case 2), the fix that actually
+resolves it is almost always in the **reader** (filter on the field every
+current writer actually maintains), not in any one writer — resist the
+urge to "fix" the writer that happens to be freshest in your context.
 
 ---
 
@@ -990,9 +1068,18 @@ selector was ever guaranteed to stay put.
 
 ## When this file isn't enough
 
-These are the two patterns this project actually hit more than once.
+These are the recurring patterns this project's sessions have actually hit
+more than once — UI/widget patterns above, Server Action and data-layer
+patterns in [`backend-and-data-gotchas.md`](backend-and-data-gotchas.md).
 For any other recurring pattern that costs a multi-turn fix, add a new
-recipe here — a prompt block plus its post-publish verification snippet —
-rather than only writing up what went wrong in `prototype-to-widgets.md`.
-The lesson explains the trap; the recipe is what stops it from
-reoccurring.
+recipe here (or there, if it's backend/data-shaped) — a prompt block plus
+its post-publish verification snippet — rather than only writing up what
+went wrong in the matching lessons file. The lesson explains the trap; the
+recipe is what stops it from reoccurring.
+
+**This file is not only for wave-authoring.** Every recipe here came from
+a real multi-turn fix, most of them found while debugging an already-built
+app, not while planning a new wave. Check here (and in
+`backend-and-data-gotchas.md`) **before investigating any bug from
+scratch** — live debugging, not just "what to say when writing a new
+wave's Mentor prompt."

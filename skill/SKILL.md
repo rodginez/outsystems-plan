@@ -1,6 +1,6 @@
 ---
 name: outsystems-plan
-version: "0.9.0"
+version: "0.10.0"
 description: >
   Guides you from a blank folder to a complete OutSystems build plan through
   a short interactive interview. Reads your spec and reference screens, proposes
@@ -153,6 +153,18 @@ Executing a wave is not "fire Mentor, publish, done" — it is a fixed
 six-step loop, and it applies whether the wave is brand new or a fix on top
 of one already published. **Skip a step only when the user explicitly says
 to; never skip a step silently.**
+
+**The same rule applies outside the wave cycle entirely.** A user-reported
+live bug on an already-built app is not exempt from checking
+`references/recipes.md`, `references/prototype-to-widgets.md`, and
+`references/backend-and-data-gotchas.md` first — most of the recipes and
+lessons in those three files were written *from* debugging an already-built
+app, not from wave planning. Before tracing a bug from scratch, search those
+files for the symptom (a stale/wrong-version field, a screen showing only
+partial data after a join, a save that silently no-ops) — a matching entry
+turns a multi-turn investigation into a five-minute targeted fix, and
+skipping this check is exactly how a previously-documented bug gets
+re-discovered the hard way.
 
 **Before starting the cycle for the next wave, re-check the plan itself**:
 re-read that wave's `spec-wN.md` in full (not from memory — see
