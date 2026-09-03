@@ -1,6 +1,6 @@
 ---
 name: outsystems-plan
-version: "0.8.0"
+version: "0.9.0"
 description: >
   Guides you from a blank folder to a complete OutSystems build plan through
   a short interactive interview. Reads your spec and reference screens, proposes
