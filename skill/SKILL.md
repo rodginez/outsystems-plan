@@ -1,6 +1,6 @@
 ---
 name: outsystems-plan
-version: "0.11.0"
+version: "0.12.0"
 description: >
   Guides you from a blank folder to a complete OutSystems build plan through
   a short interactive interview. Reads your spec and reference screens, proposes
@@ -387,6 +387,18 @@ seed isn't a screen. But if the seed itself is non-trivial (many records,
 several entity types, business-rule-shaped data like scoring bands), treat
 it as real wave weight when judging size, even though it isn't a screen or
 an action in the usual sense.
+
+**Before deriving waves for any capability that calls an AI/LLM model**
+(a suggestion, a summary, a classification, an extraction — not just a
+dedicated "AI wave," any wave where this comes up at all), read
+`references/architecture-recipes.md` first. Its first recipe — an agent
+must not be coupled to the project that calls it — changes how such a
+wave gets split: the agent's own logic becomes its own asset with its
+own wave-equivalent scoping (build it, test it standalone), and the
+calling app only ever gets a thin integration wave on top. Scoping this
+as ordinary server actions inside the calling app, the way every other
+wave in this file is scoped, is exactly the mistake this recipe exists
+to catch before a spec gets written.
 
 ### The shape that usually emerges
 
