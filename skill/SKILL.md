@@ -1,6 +1,6 @@
 ---
 name: outsystems-plan
-version: "0.10.0"
+version: "0.11.0"
 description: >
   Guides you from a blank folder to a complete OutSystems build plan through
   a short interactive interview. Reads your spec and reference screens, proposes
@@ -230,6 +230,30 @@ This is a standing check, every wave, not a one-time planning-phase step.
 6. Test         — update/add E2E test cases for what changed, then ask the
                   user whether to run them now (never auto-run — see the
                   RUNBOOK's per-wave procedure)
+7. Distill      — before declaring the wave closed, evaluate whether
+                  anything hit this wave is a new, generalizable lesson
+                  (a bug pattern, a Mentor quirk, a fragile widget
+                  behavior) — not just "did something go wrong," most
+                  waves that hit a real snag qualify. If nothing new and
+                  generalizable came up, say so in one line and stop —
+                  this step is not "always add a lesson." **If something
+                  did**, do NOT just append it to `recipes.md` /
+                  `prototype-to-widgets.md` / `backend-and-data-gotchas.md`.
+                  First re-read the existing lessons/recipes those new
+                  findings are adjacent to — a fresh discovery can
+                  invalidate, narrow, or supersede an older one (e.g. "we
+                  learned the real fix is upstream" can mean an old
+                  lesson's workaround should be removed, not kept next to
+                  the new one). Then propose, in the conversation, what to
+                  add/change/remove and where, and **wait for the user's
+                  explicit go-ahead before editing any reference file** —
+                  do not silently rewrite the skill's own reference files
+                  as a side effect of closing a wave. Only after approval,
+                  make the edit(s) as one coherent pass, not a series of
+                  disconnected appends. The goal is a reference set that
+                  stays internally consistent as it grows, not a longer
+                  and longer list of lessons that may quietly contradict
+                  each other.
 ```
 
 **After every step completes, state what just finished and name the next
