@@ -1,6 +1,6 @@
 ---
 name: outsystems-plan
-version: "0.13.0"
+version: "0.14.0"
 description: >
   Guides you from a blank folder to a complete OutSystems build plan through
   a short interactive interview. Reads your spec and reference screens, proposes
@@ -582,44 +582,59 @@ Seed it with the project header and an empty entry for W1:
 ```markdown
 # Execution log — [Project name]
 
-Started: <!-- fill with `date "+%Y-%m-%dT%H-%M-%S"` at first session -->
+Started: <!-- fill with `date "+%Y-%m-%dT%H:%M:%S"` at first session -->
 
 ---
 ```
 
 At the **start of each wave** (before firing Mentor), run:
 ```bash
-date "+%H:%M:%S"
+date "+%Y-%m-%dT%H:%M:%S"
 ```
 Store the result as `<started>`.
 
 At the **end of each wave** (after gate passed and tests decision made), run:
 ```bash
-date "+%H:%M:%S"
+date "+%Y-%m-%dT%H:%M:%S"
 ```
 Store the result as `<finished>`.
+
+Every other entry in the wave (turn, deviation, fix, publish, gate, tests,
+status) also gets its own timestamp — run `date "+%H:%M:%S"` right when that
+line is written, not reconstructed afterward from memory. This is what makes
+the log usable later for "how much time did wave N actually take."
 
 Then append one entry in this exact format — nothing more:
 
 ```markdown
 ## W<N> — <name>  |  <started> → <finished>
-- Turn <n>: <runId short>, <HH:MM>→<HH:MM> (<Xm>), retries=<N> → <applied|failed|split>
-- [Deviation: <what happened> → <how resolved>]
-- [Fix turn: <runId short>, <Xm>, retries=<N> → <what was fixed>]
-- Publish: rev <N>
-- Gate: PASS | FAIL (<reason>)
-- Tests: <N>/<N> pass [(<IDs> deferred — <reason>)]
-- Status: DONE | BLOCKED (<reason>)
+- [HH:MM:SS] Turn <n>: <runId short>, <HH:MM>→<HH:MM> (<Xm>), retries=<N>, ~<tokens> tok → <applied|failed|split>
+- [HH:MM:SS] [Deviation: <what happened> → <how resolved>]
+- [HH:MM:SS] [Fix turn: <runId short>, <Xm>, retries=<N>, ~<tokens> tok → <what was fixed>]
+- [HH:MM:SS] Publish: rev <N>
+- [HH:MM:SS] Gate: PASS | FAIL (<reason>)
+- [HH:MM:SS] Tests: <N>/<N> pass [(<IDs> deferred — <reason>)]
+- [HH:MM:SS] Status: DONE | BLOCKED (<reason>)
+- Wave tokens: ~<sum of turn tokens> tok
 ```
 
-Lines in `[brackets]` are optional — include only when something actually
-happened. A clean wave is four lines. A messy wave names what was messy.
+Lines in `[brackets after the timestamp]` are optional — include only when
+something actually happened. A clean wave is five lines plus the tokens
+total. A messy wave names what was messy.
+
+**Tokens are an approximation, not a metered value.** Read whatever usage
+figure the Mentor run surfaces (`mentor_get_run` / `mentor_get_event`
+progress events) when one is present; when none is available, estimate from
+prompt + response size (~4 chars/token) and mark it `~`. The goal is a
+rough sense of cost per turn and per wave, not an exact bill — never block
+the log entry on getting a precise number.
 
 **What belongs in the log:**
-- Every Mentor turn that reached terminal state (runId + timing + retries)
+- Every Mentor turn that reached terminal state (runId + timing + retries + approx tokens)
 - Every deviation from the spec and its resolution (one line each)
 - Gate verdict and test result
 - Known gaps that carry forward
+- A timestamp on every line, and a per-wave token subtotal
 
 **What does not belong:**
 - Intermediate poll results
@@ -653,7 +668,9 @@ updated as waves execute. It contains:
 6. **Mentor prompt guardrails** — prepended to every Mentor prompt, every wave
 7. **Static gate checklist** — entity count, action count, screen count, zero hex literals, no unauthorized roles, **screen matches the approved prototype screenshot** (layout, grouping, negrito/weight, dynamic vs static text — verify by opening the published screen and comparing, not by re-reading the spec). **For any screen rendering a repeated list of rows with a selectable control per row** (radio group, dropdown, checkbox — an audit checklist, a survey, a set of per-item toggles): interact with the control in **two different rows**, not just one, and confirm the first row's selection survived the second row's click. A single-row test cannot catch a control accidentally bound to one shared screen variable instead of a per-row list attribute — that bug makes every row mirror whichever row was clicked last, and looks completely correct if only one row is ever touched during verification (see `prototype-to-widgets.md` #15). **If the wave created a new screen, check that the sidebar/menu item meant to reach it actually points there** — a nav shell built early (before every screen it links to exists) commonly ships every link pointing at whatever placeholder existed at the time, and nothing re-flags the stale link once the real screen is built. This is a standing check on every wave that adds a screen, not a one-time fix.
 8. **Failure playbook** — what to do when things go wrong
-9. **Timing log** — one row per milestone, cumulative across waves
+9. **Timing log** — one row per milestone, cumulative across waves, each row
+   carrying its own timestamp and an approximate token count (see
+   `execution-log.md` format in Step 5)
 10. **Never list** — absolute prohibitions
 
 ### Mentor prompt guardrails
