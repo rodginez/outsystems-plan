@@ -1,6 +1,6 @@
 ---
 name: outsystems-plan
-version: "0.14.0"
+version: "0.15.0"
 description: >
   Guides you from a blank folder to a complete OutSystems build plan through
   a short interactive interview. Reads your spec and reference screens, proposes
@@ -781,6 +781,91 @@ must *do*.
   existing condition and say how the two combine — Mentor replaces the
   old `Visible`/`Enabled` expression rather than ANDing onto it (see
   `prototype-to-widgets.md` #39).
+
+---
+
+## Keeping RESUME.md current — not just at pause time
+
+Once a project has a `RESUME.md` (see below), keep it current rather than
+letting it go stale until the next pause:
+
+- **Update it whenever a wave actually closes** (gate passed, tests run or
+  explicitly deferred, execution-log.md entry written) — not on every
+  Mentor turn or every fix-and-republish cycle, just at the same
+  granularity as an execution-log.md wave entry. A RESUME.md that still
+  says "next: W3" three waves later is worse than no RESUME.md — it
+  actively misleads whoever reads it next.
+- **Update it whenever the user explicitly asks** ("update the resume
+  doc", "save progress"), even mid-wave — treat this the same as any other
+  direct instruction, don't wait for a natural milestone.
+- **Update it immediately if something in it becomes wrong** — the app
+  gets recreated under a new key, a new "never touch" item is discovered,
+  a Mentor session note goes stale — don't wait for the next scheduled
+  update if a fact in the file is now false.
+
+This is a fast, mechanical edit (revise the identity table's revision
+number, the "what's done" section, the "next step" pointer) — it should
+never require re-deriving anything, just transcribing what's already in
+RUNBOOK.md/execution-log.md into the short-orientation form. If RESUME.md
+doesn't exist yet and one of the triggers above fires, create it using the
+same 7 sections as the pause-time version below rather than waiting for an
+explicit pause.
+
+## Pausing the project — write RESUME.md
+
+Whenever the user says they're stepping away for a while (not just ending
+today's session — an indefinite pause), write `RESUME.md` in the project
+folder before finishing up (or bring an existing one fully up to date, per
+above). The next session opens cold, in a fresh context, possibly days or
+weeks later, possibly a different machine — the goal is that it never has
+to guess or re-derive anything RESUME.md could just state. Write it as if
+handing off to a colleague who has never seen this project, not as a diary
+entry for yourself.
+
+**Required sections:**
+
+1. **Identity** — tenant hostname/id, OutSystems login, app name, app key,
+   environment key, current revision number, live app URL, and the
+   prototype Artifact URL. Copy these as a table so the next session can
+   paste them straight into tool calls without re-deriving anything from
+   `app_list`/`env_list`.
+2. **Anything on the "Never touch" list** — restate it here too, not just
+   in RUNBOOK.md. A resumed session is exactly when a stale assumption
+   ("there's only one app in this tenant") is most likely to cause real
+   damage, because the person resuming has forgotten the context that
+   made the warning necessary in the first place.
+3. **Mentor session note** — state explicitly that any Mentor session id
+   from before the pause is almost certainly expired and must not be
+   reused blindly; start a fresh `mentor_start_session` +
+   `mentor_load_asset` rather than attempting the old session id first.
+4. **What's actually done, and how you know** — which waves are complete,
+   and a one-line pointer to the execution-log.md entries proving it was
+   verified live (not just "Mentor reported 0 errors"). If the project
+   accumulated new lessons into `recipes.md`/`prototype-to-widgets.md`/
+   `backend-and-data-gotchas.md` during this run, name them here so the
+   next session doesn't have to diff the reference files to notice.
+5. **Open decisions — flag, don't silently resolve.** Anything left
+   genuinely undecided when the pause happened (a data-cleanup strategy,
+   a scope question raised but not answered) goes here as an explicit
+   choice for the next session to make, with enough context to make it
+   without re-investigating from scratch. Never quietly pick one on the
+   next session's behalf just to keep momentum — a paused project is
+   exactly where a silently-made call is most likely to contradict what
+   the user actually meant.
+6. **Next step** — name the next wave and point at its spec file. If that
+   spec is still a lightweight stub (per the "detail on approach, not
+   upfront" rule), say so explicitly rather than letting the next session
+   discover mid-prompt that the spec needs fleshing out first.
+7. **A process reminder for anything that already went wrong once** — if
+   this run caught itself skipping a skill instruction (e.g. not
+   re-reading `recipes.md`/`backend-and-data-gotchas.md` immediately
+   before writing a Mentor prompt), say so directly in RESUME.md so the
+   next session doesn't repeat it. A lesson learned mid-project and never
+   written down is a lesson the next session pays for again.
+
+Point at RUNBOOK.md for anything RESUME.md would otherwise duplicate (the
+full wave table, the guardrail text, the failure playbook) — RESUME.md is
+a short orientation document, not a second copy of the RUNBOOK.
 
 ---
 
