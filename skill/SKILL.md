@@ -1,6 +1,6 @@
 ---
 name: outsystems-plan
-version: "0.16.0"
+version: "0.17.0"
 description: >
   Guides you from a blank folder to a complete OutSystems build plan through
   a short interactive interview. Reads your spec and reference screens, proposes
@@ -504,6 +504,16 @@ several entity types, business-rule-shaped data like scoring bands), treat
 it as real wave weight when judging size, even though it isn't a screen or
 an action in the usual sense.
 
+**A Screen Block doesn't count against the one-screen cap either, with the
+same caveat.** The wave that first builds a reusable UI fragment (see
+guardrail 11 and `references/recipes.md`) still gets only one screen, plus
+the Block it builds for that screen or a near-future one — the Block isn't
+a second screen, it's a container the screen places an instance of. But a
+Block non-trivial enough to carry its own multi-step internal logic (not
+just a card or header) is real wave weight, the same way a non-trivial
+seed is — judge it on substance, not on which column of the Scope table it
+lands in.
+
 **Before deriving waves for any capability that calls an AI/LLM model**
 (a suggestion, a summary, a classification, an extraction — not just a
 dedicated "AI wave," any wave where this comes up at all), read
@@ -574,7 +584,9 @@ One file per wave. Each file follows this structure:
 One sentence. What can a human do and verify after this wave is published?
 
 ### Scope
-- Creates: [entity list, action list, screen list]
+- Creates: [entity list, action list, screen list, screen block list —
+  any UI fragment appearing on more than one screen is a Block, not
+  duplicated markup (guardrail 11, `references/recipes.md`)]
 - Consumes (must not alter): [what earlier waves built — in parallel mode,
   name the owning track for each item, e.g. "Entity Order — Foundation",
   "Action RegisterOrder — Track A, wave A2"]
@@ -915,6 +927,16 @@ GUARDRAILS (apply to every screen and action in this wave):
     creates new screens as login-required unless told otherwise, so a
     public screen that the prompt never calls public gets a login wall
     (and every E2E test without a saved session fails on it).
+
+11. Any UI fragment that appears (or will appear, per the plan) on more
+    than one screen — a card, a status header, a list-row template, a
+    repeated form section — must be built as a reusable OutSystems Screen
+    Block, created at the module's top-level Blocks folder (never nested
+    under one screen), with named Input Parameters for whatever differs
+    per placement. Do not restate or rebuild its widget tree inline on a
+    second screen — place an instance of the existing Block instead. See
+    `references/recipes.md` → "a UI fragment reused across screens must be
+    an OutSystems Screen Block, not duplicated markup."
 ```
 
 ### Prompt content rules

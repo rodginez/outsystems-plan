@@ -6,7 +6,8 @@ description: >
   with an "all"/empty option, a modal containing a form, sticky footers,
   per-row list controls (selection + persistence + bulk save), reserved
   theme class names, MasterDetail, icon+label link wrapping, appearance
-  resets, external fonts, and more. Read this BEFORE writing a Mentor
+  resets, external fonts, reusing a UI fragment as an actual Screen Block
+  instead of duplicated markup, and more. Read this BEFORE writing a Mentor
   prompt whenever the wave's scope matches one of these patterns, AND
   before investigating any live bug from scratch — most recipes here came
   from debugging an already-built app, not from wave planning. Each
@@ -24,6 +25,95 @@ relevant block into the Mentor prompt (adjusting names/screens) instead
 of describing the pattern in your own words — the wording here already
 carries the two-part fixes and box-model facts that a natural-language
 description tends to drop.
+
+## Recipe: a UI fragment reused across screens must be an OutSystems Screen Block, not duplicated markup
+
+**When to use:** any wave whose spec, or whose prototype, describes a
+piece of UI that appears — now, or in an already-planned later wave — on
+more than one screen: a card, a status/summary header, a list-row
+template, a field group reused across a create and an edit screen, a
+confirmation panel, a per-item action menu. Also applies the instant a
+spec or a prototype's own component naming uses the word "block" or
+"component" for a piece of the layout — treat that as the author already
+telling you this is reusable, not just a styling coincidence.
+
+**What a Screen Block actually is:** OutSystems's native mechanism for a
+reusable, parametrized piece of UI — the `Block` container widget, built
+with its own widget tree, its own Input Parameters (what differs per
+placement), and optionally its own Block Client Actions / Notify events
+(what it reports back upward — a row was clicked, a form was submitted).
+Created at the module's **top-level Blocks folder**, it can be placed on
+any screen in the same app; created nested under one specific screen, its
+reuse is murkier and easy to leave as a one-off by accident. A Block is
+scoped to its own module — it is not a mechanism for sharing UI across
+separate apps, only across screens within the one app this RUNBOOK builds.
+
+**The trap this avoids:** Mentor builds exactly what one wave's prompt
+describes, for one screen, in one turn. "This looks like the card on
+ScreenX" does not cause it to reuse ScreenX's actual widget tree — without
+an explicit instruction, it reconstructs the same widgets from scratch,
+screen by screen, wave by wave. The result publishes cleanly, looks
+right, and is N independent copies of the same markup with no shared
+source. A later fix to the pattern (a spacing tweak, a new badge, an a11y
+fix) then has to be reapplied once per copy by hand, and nothing in the
+static gate catches a copy that was missed — entity/action/screen counts
+and the zero-hex-literal check have no equivalent "this pattern renders
+identically everywhere it appears" check.
+
+**The principle:** the moment a spec's Screen layout section describes
+the same visual/behavioral unit appearing on two or more screens, scope
+and build it as its own Block from the first wave that needs it — never
+as inline widgets to be "kept consistent by hand" across the screens that
+follow. Parametrize it like a function signature, not like a copy-pasted
+template with find-and-replace names.
+
+**Prompt block — first wave that builds the shared fragment:**
+
+```
+Crie um Screen Block reutilizável chamado "<BlockName>", no nível do
+módulo (pasta Blocks de topo — NÃO aninhado dentro de nenhuma tela
+específica), para que qualquer tela do app possa posicioná-lo.
+
+Parâmetros de entrada: <ParamName (Type) — o que varia por tela que usa
+o bloco>
+<Se aplicável> Evento/Notify de saída: "<EventName>" — disparado quando
+<condição>, parâmetro(s): <...>
+
+Conteúdo do bloco (mesmo nível de detalhe de uma tela normal): <descreva
+a árvore de widgets, grid de colunas, estados — ver guardrails 2, 3, 9>
+
+Em <ScreenName1>, substitua a marcação equivalente por uma instância
+deste Block, passando <ParamName> = <valor vindo desta tela>.
+```
+
+**Prompt block — a later wave placing an already-built shared block:**
+
+```
+Esta wave usa o Screen Block "<BlockName>", já existente no app (criado
+na wave <N>) — reutilize-o, NÃO recrie a árvore de widgets. Posicione uma
+instância dele em <ScreenName>, passando <ParamName> = <valor desta tela>.
+```
+
+**Verify after publish:** confirm `<BlockName>` exists as its own object
+(search via `context_search`/`context_screens`) independent of any one
+screen, with every consuming screen referencing that same object — not
+the same widget names recurring inside each screen's own separate tree.
+If a later fix to the pattern changes only one of the screens that should
+show it, that is the signature of this trap having already happened — the
+"block" was actually N independent copies, and the fix needs to be
+reapplied everywhere, this time as an actual extracted Block.
+
+**Parallel-mode note:** a Block shared by waves in more than one track
+must be built once — in Foundation, or whichever wave first needs it —
+and consumed, never recreated, by every other track that places it. Name
+it explicitly in the consuming wave's spec under "Consumes (must not
+alter)": e.g. `Screen Block CardResumo — Foundation` or `Screen Block
+FiltroAvancado — Track A, wave A2`. Two tracks both building "their own
+version" of the same visual unit is exactly the entity/action/screen
+collision the parallel-mode independence rule exists to catch — a Block is
+no exception just because it isn't a screen.
+
+---
 
 ## Recipe: dropdown with an "all"/empty-selection option
 

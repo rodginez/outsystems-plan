@@ -20,6 +20,10 @@
 - Static entities: [list or "none"]
 - Server actions: [list]
 - Screens: [list]
+- Screen Blocks: [list or "none" — any UI fragment this wave builds that
+  appears on more than one screen, now or in a later planned wave, is a
+  Block, not duplicated markup; see `recipes.md` → "a UI fragment reused
+  across screens must be an OutSystems Screen Block"]
 
 **Consumes (must not alter):**
 - [list of artifacts from earlier waves — in parallel mode, name the
