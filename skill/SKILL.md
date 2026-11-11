@@ -1,6 +1,6 @@
 ---
 name: outsystems-plan
-version: "0.19.0"
+version: "0.20.0"
 description: >
   Guides you from a blank folder to a complete OutSystems build plan through
   a short interactive interview. Reads your spec and reference screens, proposes
@@ -783,6 +783,20 @@ not a gap, as long as it's stated). A bare "3/3 passed" sentence with
 nothing backing it is exactly the kind of claim that erodes trust once
 someone asks "how do you know" — see the wave execution cycle's Test step.
 
+**Repo mode:** post this same evidence to the wave's issue immediately after
+the run — `gh issue comment <number> --repo <owner>/<repo> --body-file
+<file>` — not deferred to the wave-closing comment. Since
+`playwright-report/index.html` is overwritten by the next run, first copy it
+somewhere the next run won't touch (e.g. `tests/report-archive/w<N>-<run
+timestamp>/`) and reference *that* path in the comment, otherwise the link
+in an already-posted comment silently points at a later, unrelated run's
+report by the time anyone reads it. The comment body: pass/fail tally, the
+failed test IDs with a short error excerpt for each (so the report is
+useful even to someone without the repo checked out locally), and the
+archived report path. See "Logging activity on the issue as it happens" in
+"Repo planning mode" (Step 6) for the same pattern applied to every other
+meaningful event in the wave cycle, not just test runs.
+
 ---
 
 ## Step 5 — Create execution-log.md
@@ -1095,17 +1109,48 @@ protocol above with the issue's own assignee):**
 In sequential + repo mode, skip this claiming step entirely — there is only
 one person firing, so there is nothing to serialize.
 
-**Closing a wave** (replaces appending an `execution-log.md` entry):
+**Logging activity on the issue as it happens** (replaces writing
+`execution-log.md` lines mid-wave): in repo mode, the issue's comment thread
+*is* the execution log, read live by anyone watching the issue — so don't
+batch everything into one comment at the end. Post a comment the moment
+each of these happens, using the same one-line format `execution-log.md`
+(Step 5) uses for that event, timestamped:
+
+```bash
+gh issue comment <number> --repo <owner>/<repo> --body-file <scratch file with just this one event's line(s)>
+```
+
+- A Mentor turn reaches a terminal state (runId, timing, retries, approx
+  tokens, applied/failed/split)
+- A deviation from the spec and how it was resolved
+- A fix turn
+- A publish (revision number)
+- A static gate verdict
+- An E2E test run — see "Repo mode" under Step 4 above for this comment's
+  specific content (pass/fail tally, failed test IDs with error excerpts,
+  the archived report path)
+
+Each of these is its own comment, not one line appended to a growing draft
+— GitHub has no API for editing in place safely across a session, and a
+separate comment per event is also what makes the thread actually useful to
+someone skimming it later ("when did the gate fail," "which turn fixed the
+layout"). This is the repo-mode equivalent of writing a line into
+`execution-log.md` right when it happens rather than reconstructing the
+whole entry from memory at wave end (Step 5) — same discipline, different
+destination.
+
+**Closing a wave** (replaces appending the final `execution-log.md`
+summary line):
 
 ```bash
 gh issue comment <number> --repo <owner>/<repo> --body-file <comment file>
 gh issue close <number> --repo <owner>/<repo>
 ```
-The comment uses the **exact same format** as a local `execution-log.md`
-entry (Step 5) — turn/deviation/fix/publish/gate/tests/status lines, each
-timestamped, plus the Session line. **The Session line is mandatory here
-too** — it's the only durable record of what the next wave, in any track,
-resumes from.
+This closing comment does not need to repeat every interim comment above
+verbatim — it's the **Status: DONE | BLOCKED** line and the **Session**
+line, in the same format a local `execution-log.md` entry's last two lines
+use. **The Session line is mandatory here too** — it's the only durable
+record of what the next wave, in any track, resumes from.
 
 **RUNBOOK.md in repo mode** has no `## Current wave`, `## Tracks`, or
 `## Wave plan` section (items 1 and 3 above) — replace them with a single
@@ -1351,5 +1396,9 @@ a short orientation document, not a second copy of the RUNBOOK.
       every wave has an issue, titled and labeled per "Repo planning mode";
       every issue was added as a Project item and its Status field is
       Todo/In Progress/In Review/Done as appropriate, not tracked via a
-      label; RUNBOOK has the `## Issue tracker` section (repo, labels,
-      Project/Status ids), not the local wave table/resumption pointer
+      label; turns/deviations/fixes/publishes/gate verdicts/test runs were
+      each posted as their own comment when they happened, not batched into
+      the closing comment; every test-run comment links an archived (not
+      live, overwritten) report path; RUNBOOK has the `## Issue tracker`
+      section (repo, labels, Project/Status ids), not the local wave
+      table/resumption pointer

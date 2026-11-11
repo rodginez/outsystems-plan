@@ -165,8 +165,22 @@ If the requested status has no matching option, stop and say so — add the
 option via the Project UI first, don't substitute a label or the closest
 existing option.
 
-**Close a wave** (replaces an `execution-log.md` entry — same format, as an
-issue comment, Session line mandatory):
+**Log activity as it happens** (replaces writing `execution-log.md` lines
+mid-wave — the issue's comment thread *is* the log, so don't batch it):
+post one comment per event, the moment it happens, using the same one-line
+format an `execution-log.md` entry uses for that event:
+```bash
+gh issue comment <number> --repo owner/repo --body-file <one event's line(s)>
+```
+Post for: each Mentor turn reaching a terminal state, each deviation, each
+fix turn, each publish, the gate verdict, and each E2E test run (pass/fail
+tally + failed test IDs with error excerpts + the archived report path —
+`playwright-report/` is overwritten every run, so copy it to
+`tests/report-archive/w<N>-<timestamp>/` first and link *that* path).
+
+**Close a wave** (replaces the final `execution-log.md` summary line — just
+the Status and Session lines, not a repeat of everything already posted
+above, as an issue comment, Session line mandatory):
 ```bash
 gh issue comment <number> --repo owner/repo --body-file <comment file>
 gh issue close <number> --repo owner/repo
@@ -205,8 +219,10 @@ Parallel mode — add a `Track` column, grouped by track:
 
 For each wave, in order. **Local + parallel mode:** run the Claim protocol
 section above in place of step 0. **Repo mode:** run the Issue tracker
-section above in place of step 0 (and in place of step 5's `execution-log.md`
-append — close the issue instead).
+section above in place of step 0, log each event below as it happens per
+"Log activity as it happens" instead of waiting to write it into
+`execution-log.md`, and close the issue (step 5) instead of appending the
+final `execution-log.md` line.
 
 **0. Update resumption pointer and record wave start**  *(local + sequential mode)*
 
@@ -391,6 +407,8 @@ and push this file as part of closing the wave.
 - **Repo mode:** close a wave's issue without the Session line in the closing comment — it's the only durable record of what the next wave resumes from.
 - **Repo mode:** maintain a local `execution-log.md`/wave-table alongside the issue tracker "just in case" — pick one source of truth; a second one left around only drifts out of sync and gets trusted by mistake.
 - **Repo mode:** treat "move it to In Progress/In Review/…" as a label edit — it's the Project item's Status field; see "Move a wave's status" in the Issue tracker section.
+- **Repo mode:** wait until the wave closes to post anything — turns, deviations, fixes, publishes, gate verdicts, and test runs each get their own comment when they happen; see "Log activity as it happens."
+- **Repo mode:** link to `playwright-report/` directly in a test-run comment — it's overwritten by the next run; archive it first and link the archived copy.
 
 ---
 
