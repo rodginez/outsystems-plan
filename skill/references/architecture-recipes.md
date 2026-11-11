@@ -48,9 +48,9 @@ own action flow.
    indistinguishable from an app change.
 2. **No data-model leakage into the agent.** If the agent's own
    interface is shaped around the calling app's specific entities (e.g.
-   an `AnalisarItemComIA` action that takes an `ItemFicha` record
+   an `AnalisarItemComIA` action that takes a `ChecklistItem` record
    directly instead of generic text), the agent becomes unreusable for
-   a second ficha type, a second app, or a second tenant. The agent's
+   a second checklist type, a second app, or a second tenant. The agent's
    input/output contract should be generic (text in → structured text
    out), not app-entity-shaped.
 3. **Failure isolation.** An agent timeout, rate limit, or bad response

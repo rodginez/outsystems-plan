@@ -275,7 +275,7 @@ nothing at all appears where content used to be. This is easy to miss
 in a quick visual check because an empty screen doesn't look broken the
 way an error would; it just looks like an unusually sparse loading
 state. It surfaced here as a real, previously-shipped screen (a
-Consultas list with an "empty" placeholder from the very first wave)
+Cases list with an "empty" placeholder from the very first wave)
 that had lost its empty-state block entirely at some undated point
 between waves — no log recorded when or why, and nothing before an E2E
 suite re-flagged it caught the regression, because a visually "blank
@@ -700,11 +700,11 @@ client action passes `GetAggregate.List` directly to the server action, and
 the `fill()` triggered an aggregate refresh before `SalvarEdicao` ran,
 the list is mid-fetch (empty) when the server action is called. The server
 action creates 0 records, the toast still appears, and all subsequent flows
-that depend on those records silently break (e.g., `OpenAuditoria` finds 0
-ItemFicha → creates 0 Respostas → item cards never appear in the audit screen).
-This was discovered in W15: `PublishFichaVersao` accepted an empty
-`ItensFicha` list from Playwright tests, creating FichaVersao records with
-0 ItemFicha, breaking W5/W7/W8/W9/W10/W11 thereafter.
+that depend on those records silently break (e.g., `OpenAudit` finds 0
+ChecklistItem → creates 0 Responses → item cards never appear in the audit screen).
+This was discovered in W15: `PublishChecklistVersion` accepted an empty
+`ChecklistItems` list from Playwright tests, creating ChecklistVersion records with
+0 ChecklistItem, breaking W5/W7/W8/W9/W10/W11 thereafter.
 
 **The two-part fix (both are mandatory):**
 
@@ -737,7 +737,7 @@ a meio do refresh (lista vazia), e o server action cria 0 registros.
 
 ---
 
-## Recipe: restoring seed data after test pollution (FichaVersao)
+## Recipe: restoring seed data after test pollution (ChecklistVersion)
 
 **When to use:** whenever E2E tests created corrupt records (e.g., versions
 with 0 items) that break other tests, and you need to restore the app to a
@@ -753,7 +753,7 @@ pick a bad one if the seed version was also overwritten.
 Criar server action "<ResetEntityToSeed>" (sem inputs; Output: ErrorMessage
 Text) com a seguinte lógica:
 1. Buscar todos os registros de "<VersaoEntity>" relacionados a "<SeedId>"
-   (ex.: FichaId = 1), ordenados por NumeroVersao ASC.
+   (ex.: ChecklistId = 1), ordenados por NumeroVersao ASC.
 2. Encontrar o PRIMEIRO (menor NumeroVersao) que tenha pelo menos 1 registro
    filho associado (aggregate com JOIN ou Count > 0).
 3. Marcar esse registro como Ativa = True; fazer CreateOrUpdate.
@@ -777,8 +777,8 @@ or state-mutating test wave (item inactivation, version publishing, status
 transitions) — not only as an emergency recovery step. This is broader
 than the single-entity reset recipe above: that one repairs *one* entity's
 active-version pointer; this one clears every transactional record the
-E2E suite creates (Consultas, Auditorias, Respostas, Documentos, or your
-project's equivalents), leaving reference/seed data (Fichas, Protocolos)
+E2E suite creates (Cases, Audits, Responses, Documents, or your
+project's equivalents), leaving reference/seed data (Checklists, Protocols)
 untouched.
 
 **The trap this avoids:** transactional test data accumulates silently
@@ -800,7 +800,7 @@ Criar server action "WipeAllTestData" (sem inputs; Outputs:
 Text) que apaga em cascata, na ordem correta de dependência (filhos
 antes de pais), TODOS os registros de <lista de entidades
 transacionais>. NÃO apagar <lista de entidades de referência/seed:
-Ficha, FichaVersao, ItemFicha, Protocolo, ...>. Contar cada entidade
+Checklist, ChecklistVersion, ChecklistItem, Protocol, ...>. Contar cada entidade
 antes de apagar e devolver a contagem em cada output. Expor via um
 botão vermelho/destrutivo numa área "Dev"/"Utilitários" (ver lição
 sobre ferramentas de manutenção permanentes), com texto deixando claro
@@ -834,8 +834,8 @@ later spec looking at a corrupted seed it never touched — different
 failures than either "dirty data" or "real regression," and confusing
 because the wipe+reseed you just ran make it look like the environment
 was clean going in. Confirmed directly: `w15`/`w16` (both permanently
-inactivate/edit `Ficha` items) run ahead of `w7`/`w8`/`w9`/`w10`/`w11`/
-`w17`/`w18` in one full-suite pass corrupted the shared `Ficha` those
+inactivate/edit `Checklist` items) run ahead of `w7`/`w8`/`w9`/`w10`/`w11`/
+`w17`/`w18` in one full-suite pass corrupted the shared `Checklist` those
 later specs assume is stable, producing item-not-found failures with no
 product code involved. **Segregate the run into two passes**: (1) specs
 that permanently mutate shared seed data, (2) everything else that only
@@ -849,7 +849,7 @@ when investigating whether a failure is a real regression.
 
 **When to use:** any entity that represents versioning/activation state with
 BOTH a Boolean flag (e.g., `Ativa`) AND a static-entity `Status` reference
-(e.g., `StatusFichaVersao`: Rascunho/Inativa/Ativa) — common when a later
+(e.g., `StatusChecklistVersion`: Rascunho/Inativa/Ativa) — common when a later
 wave adds a boolean shortcut alongside a status field an earlier wave
 already established, or vice-versa.
 
@@ -858,21 +858,21 @@ already established, or vice-versa.
 1. **A new writer skips a field a spec's prose didn't mention.** A NEW
    server action (built in a later wave) reads the spec literally and sets
    only the field the spec's prose emphasizes (e.g., "Ativa = True"), while
-   an EXISTING server action from an earlier wave (e.g., `OpenAuditoria`)
-   filters by the OTHER field (`Status = Entities.StatusFichaVersao.Ativa`).
+   an EXISTING server action from an earlier wave (e.g., `OpenAudit`)
+   filters by the OTHER field (`Status = Entities.StatusChecklistVersion.Ativa`).
    Both actions publish cleanly with 0 validation errors — there is no
    compile-time link between the two fields, so nothing catches the
-   mismatch. Discovered in W15: `PublishFichaVersao` set `Ativa = True` but
-   left `Status` null/stale; `OpenAuditoria` filtered by `Status`, so every
+   mismatch. Discovered in W15: `PublishChecklistVersion` set `Ativa = True` but
+   left `Status` null/stale; `OpenAudit` filtered by `Status`, so every
    version created by the edit flow was invisible to it — blocking every
-   downstream wave that opens an auditoria (W7 through W18) with no failure
+   downstream wave that opens an audit (W7 through W18) with no failure
    visible in W15's own tests.
 2. **The two fields drift apart over time as more writers accumulate —
    no single action is "wrong," the reader just never noticed it depends
    on the field nobody actively maintains.** A query written early (e.g.
-   `GetFichaVersaoAtiva`, built before the entity had more than one writer)
+   `GetChecklistVersionAtiva`, built before the entity had more than one writer)
    filters on `Status`. Months later, several *different* writers appear —
-   a reseed utility, a "create new Ficha" flow, an admin edit screen — and
+   a reseed utility, a "create new Checklist" flow, an admin edit screen — and
    every one of them sets `Ativa` (the field that reads naturally as "the
    real one") without anyone re-checking what the original query actually
    filters on. Each new writer publishes clean, its own screen works, and
@@ -972,7 +972,7 @@ matches the UI label but not the real attribute name is silently
 accepted by a JSON→Record mapping (unknown keys are ignored) — the
 record is created successfully with that field left at its default
 (often `0`/null), with no error anywhere. This was hit while manually
-reconstructing depleted `ItemFicha` test data: passing `"Peso": 2`
+reconstructing depleted `ChecklistItem` test data: passing `"Peso": 2`
 created records with `PesoMaximo` silently left at 0, because the real
 attribute is `PesoMaximo` — the UI column is just labeled "Peso".
 
@@ -1127,7 +1127,7 @@ child records).
 **every field** of the new records to its type's default (empty text, `0`,
 `false`), not just the fields the mapping happened to omit. This produced
 silently corrupted data for weeks in this project: a "clone items into a new
-version" flow wrote every text field of `ItemFicha` as `""` except the couple
+version" flow wrote every text field of `ChecklistItem` as `""` except the couple
 of fields a different part of the UI happened to also display (which gave
 false confidence the mapping worked) — with 0 validation errors, because
 nothing about an empty string is invalid. The real damage (a `RadioButtonGroup`
