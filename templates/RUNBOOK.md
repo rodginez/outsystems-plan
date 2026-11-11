@@ -14,11 +14,12 @@
 | App name | [app name] |
 | App key | _resolve with `app_list`_ |
 | Baseline | _measure before the first Mentor turn_ |
+| Planning location | Local ← *or* Repo: `owner/repo` (see "Issue tracker" below) |
 | Planning mode | Sequential ← *or* Parallel (see corresponding section below) |
 
 ---
 
-## Current wave  *(sequential mode — delete this whole section in parallel mode; use "Tracks" below instead)*
+## Current wave  *(local mode — delete this whole section in repo mode; use "Issue tracker" below instead. Sequential-only within local mode; use "Tracks" instead if also parallel)*
 
 **→ W___ — ___**  *(update this line each time you start a new wave)*
 
@@ -29,7 +30,7 @@ This is the resumption pointer. When returning to an interrupted session:
 
 ---
 
-## Tracks  *(parallel mode only — delete this whole section in sequential mode)*
+## Tracks  *(local + parallel mode only — delete this whole section in sequential mode, or in repo mode; repo mode tracks live as issue labels instead, see "Issue tracker")*
 
 | Track | Owner | Scope | Depends on |
 |---|---|---|---|
@@ -56,7 +57,7 @@ at a time, across every track.** See the Claim protocol below.
 
 ---
 
-## Claim protocol  *(parallel mode only — delete this whole section in sequential mode)*
+## Claim protocol  *(local + parallel mode only — delete this whole section in sequential mode, or in repo mode; repo mode claims a wave via its issue assignee instead, see "Issue tracker")*
 
 The app, its live revision, and the Mentor session chain are **shared
 across every track** — there is one app, one live revision, and one
@@ -102,7 +103,53 @@ latest state," never "patch the difference in later."
 
 ---
 
-## Wave plan
+## Issue tracker  *(repo mode only — delete this whole section in local mode; replaces "Current wave," "Tracks," "Claim protocol," and "Wave plan" above)*
+
+**Repo:** `owner/repo`
+**Labels:** `outsystems-plan` (every wave issue) · `track:<name>` (parallel mode only — one per track, e.g. `track:foundation`, `track:a`) · `status:deferred` (deferred waves)
+**Milestone:** `[Project Name]` — groups every wave issue under this plan
+
+One-time setup (idempotent — safe to re-run):
+```bash
+gh auth status
+gh repo view owner/repo
+gh label create outsystems-plan --repo owner/repo --color BFD4F2 --description "Wave from outsystems-plan skill" || true
+gh api repos/owner/repo/milestones -f title="[Project Name]" || true
+```
+
+**Find the next wave to fire** (Foundation before any track; lowest unclaimed wave ID within a track):
+```bash
+gh issue list --repo owner/repo --label outsystems-plan --state open
+```
+
+**Resume the Mentor session** (most recently *closed* issue, by `closedAt` —
+not by wave number, since another track may have closed a later wave more
+recently):
+```bash
+gh issue list --repo owner/repo --label outsystems-plan --state closed \
+  --json number,closedAt --jq 'sort_by(.closedAt) | last | .number'
+gh issue view <that number> --repo owner/repo --json comments \
+  --jq '.comments[-1].body'
+```
+Parse the `Session:` line out of that comment.
+
+**Claim a wave** *(parallel mode only — skip entirely in sequential mode)*:
+```bash
+gh issue view <number> --repo owner/repo --json assignees   # must be empty
+gh issue edit <number> --repo owner/repo --add-assignee @me
+```
+If already assigned, someone else claimed it first — pick a different ready wave.
+
+**Close a wave** (replaces an `execution-log.md` entry — same format, as an
+issue comment, Session line mandatory):
+```bash
+gh issue comment <number> --repo owner/repo --body-file <comment file>
+gh issue close <number> --repo owner/repo
+```
+
+---
+
+## Wave plan  *(local mode only — delete this whole section in repo mode; use "Issue tracker" above instead)*
 
 Sequential mode:
 
@@ -129,10 +176,12 @@ Parallel mode — add a `Track` column, grouped by track:
 
 ## Per-wave procedure
 
-For each wave, in order (parallel mode: run the Claim protocol section
-above in place of step 0 — it supersedes updating a single pointer):
+For each wave, in order. **Local + parallel mode:** run the Claim protocol
+section above in place of step 0. **Repo mode:** run the Issue tracker
+section above in place of step 0 (and in place of step 5's `execution-log.md`
+append — close the issue instead).
 
-**0. Update resumption pointer and record wave start**  *(sequential mode)*
+**0. Update resumption pointer and record wave start**  *(local + sequential mode)*
 
 Update the `## Current wave` line at the top of this file to the wave you
 are about to start. This is the first thing a new session reads to resume.
@@ -260,12 +309,14 @@ A rename can report success with a fresh revision and still have the old name de
 | `run_already_in_flight` | Wait or cancel. Never fire a parallel run. |
 | (Parallel mode) `git push` rejected on the claim commit | Another track claimed first. `git pull`, re-check the claim protocol's steps 2–3 (live revision, latest session/token), then either wait for that track to finish or move to a different ready wave in your own track. |
 | (Parallel mode) Live revision doesn't match the latest `execution-log.md` entry | Something published since your last pull and the log is behind, or you're reading a stale local file. `git pull` again; if it still doesn't match, stop and reconcile before firing — do not guess which session/token is actually current. |
+| (Repo + parallel mode) An issue is assigned but its wave was never actually fired | A claim that got abandoned (dev switched tasks, session died mid-fire). Check with the assignee before unassigning (`gh issue edit <n> --remove-assignee <user>`) and re-claiming — don't assume a stale claim is free just because no comment followed it. |
+| (Repo mode) `gh issue create`/`comment`/`close` fails with a permissions error | `gh auth status` has drifted, or the token lacks `repo` scope. Re-authenticate (`gh auth login`) before continuing — do not fall back to writing a local file as a workaround, the plan's source of truth would then be split across two places. |
 
 **Escalate to a stronger model when:** a wave fails twice; a gate result is ambiguous; a fix requires amending a spec; an invariant rule is in question.
 
 ---
 
-## Execution log
+## Execution log  *(local mode only — repo mode uses the same format as the closing comment on each wave's issue instead; see "Close a wave" in the Issue tracker section)*
 
 All execution details live in `execution-log.md` (created alongside this file).
 
@@ -309,6 +360,8 @@ and push this file as part of closing the wave.
 - **Parallel mode:** fire with a session/token older than the latest `execution-log.md` entry from *any* track — resume from the actual latest, never from this track's own last wave.
 - **Parallel mode:** skip the claim commit/push before firing — it's the only thing serializing the team onto one Mentor session chain.
 - **Parallel mode:** let two tracks' specs create or alter the same entity, action, or screen — fix the scoping before either fires, not after.
+- **Repo mode:** close a wave's issue without the Session line in the closing comment — it's the only durable record of what the next wave resumes from.
+- **Repo mode:** maintain a local `execution-log.md`/wave-table alongside the issue tracker "just in case" — pick one source of truth; a second one left around only drifts out of sync and gets trusted by mistake.
 
 ---
 

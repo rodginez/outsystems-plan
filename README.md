@@ -12,7 +12,8 @@ spec) before a wave is considered done.
 
 ## What it produces
 
-Running `/outsystems-plan` in any project folder creates:
+Running `/outsystems-plan` in any project folder creates, in **local**
+planning mode (the default):
 
 ```
 RUNBOOK.md          execution guide — wave order, gates, failure playbook
@@ -31,6 +32,11 @@ tests/
   …
   files/README.md
 ```
+
+In **repo** planning mode, `spec-wN.md` and `execution-log.md` don't exist —
+each wave becomes a GitHub Issue instead (requires the `gh` CLI,
+authenticated, with access to the target repo), and `RUNBOOK.md` points at
+the issue tracker (open/closed state, labels, comments) as the live record.
 
 ---
 
@@ -63,26 +69,37 @@ Inside Claude Code:
 /outsystems-plan
 ```
 
-The skill asks 7 questions in order:
+The skill asks 8 questions in order:
 
 1. **Specification** — paste text, give a file path, or attach the document
 2. **Additional reference materials** — design system, data model, API contracts, glossary (or skip)
 3. **Reference screens** — screenshots or Figma exports showing the visual style (or skip)
 4. **Value path** — the shortest sequence a user needs to complete for the product to be useful
 5. **Target environment** — new or existing app, open or authenticated
-6. **Planning mode** — one person building end to end (**sequential**, the default), or multiple
+6. **Planning location** — wave specs as local Markdown files (**local**, the default), or as
+   GitHub Issues in a repo you name (**repo** — asks for `owner/repo` and verifies `gh` access)
+7. **Planning mode** — one person building end to end (**sequential**, the default), or multiple
    developers at once (**parallel** — waves split into a shared Foundation phase plus independent
    tracks, one per developer)
-7. **Wave breakdown review** — the skill proposes waves (or tracks, in parallel mode); you confirm or adjust
+8. **Wave breakdown review** — the skill proposes waves (or tracks, in parallel mode); you confirm or adjust
 
-After confirmation, all files are generated in the current folder.
+After confirmation, all files (or issues) are generated.
 
-**Parallel mode** adds a git-based claim protocol to `RUNBOOK.md`: the app, its live revision, and
-the Mentor session chain are shared across every track (there's no merge step for divergent Mentor
-builds), so before any track fires a wave it pulls the latest `execution-log.md`, re-resolves the
-live app revision, and resumes from whichever wave — in any track — most recently published,
-claiming the wave with a commit/push before firing. This buys independent planning, speccing, and
-testing per track; the actual build step stays serialized across the whole team, one wave at a time.
+**Planning location and planning mode are independent** — any combination is valid:
+
+- **Local + parallel** adds a git-based claim protocol to `RUNBOOK.md`: the app, its live revision,
+  and the Mentor session chain are shared across every track (there's no merge step for divergent
+  Mentor builds), so before any track fires a wave it pulls the latest `execution-log.md`,
+  re-resolves the live app revision, and resumes from whichever wave — in any track — most recently
+  published, claiming the wave with a commit/push before firing.
+- **Repo mode** (sequential or parallel) replaces `spec-wN.md`/`execution-log.md` with one GitHub
+  Issue per wave, labeled `outsystems-plan` (plus `track:<name>` in parallel mode) under a milestone
+  named after the project. Issue state (open/closed) is the wave table; a closing comment on each
+  issue carries the same turn/gate/test/Session record `execution-log.md` would have. **Repo +
+  parallel** claims a wave by assigning its issue to yourself instead of a git commit/push.
+
+Either way, this buys independent planning, speccing, and testing per track; the actual build step
+stays serialized across the whole team, one wave at a time.
 
 ---
 
@@ -235,6 +252,7 @@ README.md               this file
 
 | Version | What changed |
 |---|---|
+| 0.18.0 | Adds a second planning *location*, **repo**, alongside the existing **local** one — independent of the sequential/parallel planning *mode* from 0.16.0, so all four combinations are valid. New Question 6 (Step 1) asks local-vs-repo and, for repo, the target `owner/repo`, verified with `gh auth status` + `gh repo view` before continuing. In repo mode, Step 3 creates one GitHub Issue per wave (new `templates/issue-wave.md`, identical to `spec-wave.md` minus the redundant top header) instead of a `spec-wN.md` file, labeled `outsystems-plan` (plus `track:<name>` in parallel mode, `status:deferred` for deferred waves) under a milestone named after the project. `execution-log.md` and the local wave table/resumption pointer don't exist in this mode — RUNBOOK.md's new `## Issue tracker` section (`templates/RUNBOOK.md`) points at the repo instead: `gh issue list` finds the next open wave and the most recently *closed* one's last comment carries the same turn/gate/test/Session record an `execution-log.md` entry would, which is how the next wave (in any track) resumes the Mentor session regardless of which track closed last. **Repo + parallel** claims a wave by assigning its issue to yourself (`gh issue edit --add-assignee @me`) instead of the local mode's git commit/push claim protocol — the repo itself is already the shared, authoritative state, so no extra commit is needed to serialize tracks onto it. |
 | 0.17.0 | Adds a new `recipes.md` entry and a new Mentor guardrail (11) for OutSystems **Screen Blocks**: any UI fragment a spec describes as appearing on more than one screen (a card, a status header, a list-row template, a repeated form section) must be scoped and built as a reusable `Block` widget at the module's top-level Blocks folder — parametrized with Input Parameters and, where needed, a Notify event — never as inline widgets Mentor reconstructs independently per screen. Without the explicit instruction, Mentor has no mechanism to "notice" a screen looks like another one's card and will rebuild the same markup from scratch each time, producing N independent copies with no shared source and no static-gate check that a later fix reaches all of them. `spec-wave.md`'s Scope section gains a `Screen Blocks:` line alongside Entities/Actions/Screens; the one-screen-per-wave sizing rule gets the same "doesn't count against the cap, but judge real weight" treatment already given to data seeds. Ties into the 0.16.0 parallel-planning work: a Block shared by waves in more than one track is exactly the kind of artifact the track-independence rule (no two tracks create the same entity/action/screen) already exists to catch, so the recipe calls out naming a shared Block's owning track explicitly under "Consumes." |
 | 0.16.0 | Adds a second planning mode, **parallel**, alongside the existing **sequential** one — for teams where multiple developers build the same project at once. Prompted by the realization that git branches alone can't make OutSystems waves independent: every wave still fires against one shared app, one live revision, and one Mentor session chain (`mentor_session_id`/`mentor_session_token` chain from whichever wave most recently reached a terminal state, and the platform itself serializes concurrent runs via `run_already_in_flight`) — there is no merge step for two people's divergent Mentor builds. So parallel mode doesn't parallelize the build step; it parallelizes planning, speccing, prototyping and testing. New Question 6 (Step 1) chooses the mode. In parallel mode, Step 2 derives a shared **Foundation** phase (closes the data model, as W1–W2 already did in sequential mode) followed by independent **tracks** (wave IDs `A1`, `A2`, `B1`, …) with a hard rule that no two tracks create or alter the same entity, action, or screen. `spec-wave.md` gains a `Track` field and cross-track `Consumes` naming. `RUNBOOK.md` gains a `## Tracks` table and a `## Claim protocol` section (replacing the single `## Current wave` pointer): before firing any wave in any track, pull latest, re-resolve the live app revision, resume the Mentor session from whichever wave anywhere most recently published (never assumed from this track's own last wave), claim the wave with a commit/push, fire, then release the claim and push the closing `execution-log.md` entry — whose Session line (session id/token) becomes mandatory in this mode, since it's the only durable record of what the next track must resume from. Git becomes the lock, not a side effect of it. |
 | 0.13.0 | Lessons contributed from a separate multi-wave project, generalized and deduplicated against the existing reference set. `prototype-to-widgets.md` #28–#45: a "duplicate record" action echoing copied fields client-side without persisting them; a field that looks blank from a text/background contrast collision; a CSS fix to the platform's responsive shell breaking the other half of it at an untested width; sibling-record switching leaving one UI block on stale state; an edit toggle appending the form instead of replacing the view; `display: none` on a wrapper disabling a fixed-position component inside it; two breakpoint rules leaving an exact-pixel dead zone (find it by bisection); a placeholder string "fixed" by rewording instead of implementing (specify the DOM shape); Edit/Save/Cancel buttons present with no edit mode behind them; a list-item `data-test` landing on the wrapping container; a dropdown showing an option while its variable still holds `EmptyValue`; Mentor replacing, not combining, an existing `Visible`/`Enabled` condition; native `<select>` popups ignoring a dark theme; `color-scheme: dark`; resizing the side menu via `--side-menu-size`; icon weight classes rendering empty without their font; one unclosed CSS rule swallowing every later rule via CSS nesting; measuring at a real desktop width because OutSystems UI's breakpoint rules override below ~1024px. `backend-and-data-gotchas.md` #15–#19: `Identifier` vs `Long Integer` comparisons returning zero rows (compare as Text); read the raw FK data after the first comparison fix changes nothing; Advanced SQL dialect (Postgres for internal-only entities, ANSI-92 with any external one); break a stalled 2–3-round diagnosis loop with a prescriptive rewrite; check whether your own verification changed the data before calling it a regression. `architecture-recipes.md`: a cross-asset request/response is a Service Action out and the owning asset's own **Public** event back (no asset can trigger another's event; events and Service Actions default to private). `recipes.md`: 14 new recipes — platform-shell CSS fixes, edit-toggle replace-not-append, per-item `data-test` (and the `TableRecords` over-count), idempotent seed extension, style-vs-click gating per row, joined-entity dropdown labels, success messages that verify the write, a zero average rendered as "—", combined period keys decomposed for display, an empty filter parameter treated as a filter, role-aware redirects beyond login success, E2E state changes that read the current value first, Playwright `baseURL` trailing slash, `newContext()` inheriting `storageState`. `SKILL.md`: new "Prompt content rules" (self-contained prompts, name the applicable pitfalls, CHANGES self-consistency, bake in proven patterns, combine rather than replace conditions); guardrail 10 (explicit access level per screen — ODC defaults to login-required); static gate checks stale nav links on every wave that adds a screen; E2E rules on `testIdAttribute` placement, `baseURL`, `hasText` collisions, list-item `data-test` counts, the `TableRecords` platform limit, forced state changes and anonymous contexts. `templates/playwright.config.ts` now ships the HTML reporter `SKILL.md` already required, and normalizes `baseURL`. |

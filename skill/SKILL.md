@@ -1,20 +1,23 @@
 ---
 name: outsystems-plan
-version: "0.17.0"
+version: "0.18.0"
 description: >
   Guides you from a blank folder to a complete OutSystems build plan through
   a short interactive interview. Reads your spec and reference screens, proposes
   a wave breakdown where every wave ends with something clickable and visually
-  verifiable, and generates RUNBOOK.md + one spec file per wave + Playwright
-  test scaffolding. Every wave is prototyped in HTML and approved BEFORE Mentor
-  ever touches it — the prototype, not ASCII art, is the screen's source of
-  truth. Supports two planning modes: sequential (one person, one ordered
-  wave list) and parallel (multiple developers, a shared Foundation phase
-  plus independent tracks with a git-based claim protocol so every track's
-  Mentor fire always resumes from the latest published state). Use when
-  starting a new OutSystems project or planning a new feature set:
-  "plan this project", "quebrar em ondas", "criar plano a partir do SDD",
-  "start planning", "split this into parallel tracks for my team".
+  verifiable, and generates RUNBOOK.md + one spec per wave (as a local file or
+  a GitHub Issue) + Playwright test scaffolding. Every wave is prototyped in
+  HTML and approved BEFORE Mentor ever touches it — the prototype, not ASCII
+  art, is the screen's source of truth. Supports two independent choices:
+  planning location (local Markdown files, or GitHub Issues in a repo, with
+  issue state replacing the local wave table/execution log) and planning mode
+  (sequential — one person, one ordered wave list — or parallel — multiple
+  developers, a shared Foundation phase plus independent tracks with a claim
+  protocol so every track's Mentor fire always resumes from the latest
+  published state). Use when starting a new OutSystems project or planning a
+  new feature set: "plan this project", "quebrar em ondas", "criar plano a
+  partir do SDD", "start planning", "split this into parallel tracks for my
+  team", "track waves as GitHub issues".
 license: MIT
 allowed-tools: AskUserQuestion Bash Read Write Edit Artifact
 ---
@@ -23,11 +26,13 @@ allowed-tools: AskUserQuestion Bash Read Write Edit Artifact
 
 ## What this produces
 
-Running this skill in a project folder creates:
+Running this skill in a project folder creates, in **local** planning mode
+(the default):
 
 ```
 RUNBOOK.md              the single source of truth: waves, gates, execution order
 spec-w1.md … spec-wN.md one file per wave
+execution-log.md        timestamped record of every wave's turns, gate, tests
 tests/
   playwright.config.ts
   package.json
@@ -38,16 +43,30 @@ tests/
   files/README.md       where test fixture files (PDFs, etc.) live
 ```
 
+In **repo** planning mode, `spec-wN.md` and `execution-log.md` don't exist —
+each wave is a GitHub Issue instead, and the issue list itself (open/closed,
+labels, comments) is the live record RUNBOOK.md points at. Everything else
+(RUNBOOK.md, the tests/ folder) is unchanged. See "Local vs repo planning
+location" (Step 2) and "Repo planning mode" (Step 6).
+
 The skill produces the **plan**. Execution — firing Mentor, polling, publishing,
 running the tests — is the RUNBOOK's job.
 
-**Two planning modes** (chosen in Step 1, Question 6): **sequential** — one
-person, one ordered wave list, as above — or **parallel** — multiple
-developers, wave specs grouped into a shared Foundation phase plus
-independent tracks (`spec-a1.md`, `spec-b1.md`, …), with the RUNBOOK adding
-a claim protocol so every track's Mentor fire still resumes from whatever
-is actually the latest published state, team-wide. See "Sequential vs
-parallel planning" (Step 2) and "Tracks and the claim protocol" (Step 6).
+**Two independent choices made in Step 1:**
+
+- **Planning location** (Question 6): **local** — wave specs as Markdown
+  files, as above — or **repo** — wave specs as GitHub Issues in a repo you
+  name, with issue state replacing the local wave table and execution log.
+- **Planning mode** (Question 7): **sequential** — one person, one ordered
+  wave list — or **parallel** — multiple developers, wave specs grouped into
+  a shared Foundation phase plus independent tracks, with a claim protocol
+  so every track's Mentor fire still resumes from whatever is actually the
+  latest published state, team-wide.
+
+These combine freely (e.g. repo + parallel claims a wave by assigning its
+issue instead of a git commit). See "Local vs repo planning location" and
+"Sequential vs parallel planning" (Step 2), and "Repo planning mode" /
+"Tracks and the claim protocol" (Step 6).
 
 ---
 
@@ -366,7 +385,36 @@ This determines:
 - Whether the zero-screen, zero-action baseline needs to be measured first
 - Whether test user provisioning is needed
 
-### Question 6 — Planning mode
+### Question 6 — Planning location
+
+> "Should wave specs live as local Markdown files in this folder, or as
+> GitHub Issues in a repo? If repo: which one (owner/repo)?"
+
+This chooses between the two planning locations (see "Local vs repo
+planning location" in Step 2):
+
+- **Local files** (default) → **local**. Nothing below changes; this is
+  the mode the rest of this skill has always used — one `spec-wN.md` per
+  wave, `execution-log.md` tracking turns and status.
+- **GitHub Issues** → **repo**. Ask for the target repo (`owner/repo`) now,
+  then verify access before going any further:
+  ```bash
+  gh auth status
+  gh repo view <owner>/<repo>
+  ```
+  If either fails, stop and tell the user what to fix (`gh auth login`, or
+  a wrong/inaccessible repo name) before continuing the interview. In this
+  mode, Step 3 creates one GitHub Issue per wave instead of a file, and
+  Step 5/6 use issue state (open/closed, labels, comments) instead of
+  `execution-log.md` and the local wave table — see "Repo planning mode"
+  in Step 6.
+
+Don't default to repo mode just because the project has a GitHub repo —
+it only pays for itself when the team actually wants wave status visible
+as issues (a project board, notifications, assignees). A solo builder who
+just wants the plan on disk should stay local.
+
+### Question 7 — Planning mode
 
 > "Will one person build this end to end, or will multiple developers work
 > on it at the same time? If multiple: roughly how many parallel
@@ -375,23 +423,25 @@ This determines:
 > split can be proposed from the value path instead."
 
 This chooses between the two planning modes (see "Sequential vs parallel
-planning" in Step 2):
+planning" in Step 2) — independently of the planning location from
+Question 6; any combination of the two is valid:
 
 - **One person, or unsure** → **sequential** (default). Nothing below
   changes; this is the mode the rest of this skill has always used.
 - **Multiple developers, genuinely in parallel** → **parallel**. The wave
-  breakdown in Question 7 is then proposed as a shared Foundation phase
-  followed by independent tracks, and the generated RUNBOOK includes the
-  claim protocol (Step 6) instead of a single resumption pointer.
+  breakdown in Question 8 is then proposed as a shared Foundation phase
+  followed by independent tracks, and the generated RUNBOOK includes a
+  claim protocol (Step 6) instead of a single resumption pointer — a git
+  commit/push in local mode, an issue assignee in repo mode.
 
 Don't default to parallel just because a team *could* grow later — picking
 it commits every wave spec to naming a track and every fire to the claim
 protocol's overhead. If the team is one person today, plan sequential and
 revisit this question if headcount actually changes.
 
-### Question 7 — Confirm the wave proposal
+### Question 8 — Confirm the wave proposal
 
-After answering questions 1–6 (the planning mode from Question 6 decides
+After answering questions 1–7 (the planning mode from Question 7 decides
 whether this is a single list or a Foundation-plus-tracks split), **propose
 the wave breakdown** before generating
 any files. Show for each wave:
@@ -415,9 +465,30 @@ Adjust based on feedback. Only generate files after this is confirmed.
 
 ## Step 2 — Derive the waves
 
+### Local vs repo planning location
+
+Two ways to store the same wave specs, chosen in Question 6 — orthogonal to
+the sequential/parallel choice below. Nothing about wave sizing, naming, or
+the data model rule changes; what changes is *where a wave spec lives and
+how its status is tracked*.
+
+**Local (default):** one `spec-wN.md` file per wave (Step 3), one
+`execution-log.md` tracking turns/gate/tests/status (Step 5), a wave table
+and resumption pointer in `RUNBOOK.md` (Step 6). Exactly as this skill has
+always worked.
+
+**Repo:** one GitHub Issue per wave instead of a file (Step 3's "Repo mode"
+subsection), using issue state (open/closed), labels, and comments in place
+of `execution-log.md` and the wave table (Step 6's "Repo planning mode").
+Use this when the team wants wave status visible where their other repo
+activity already lives — a project board, @-mentions, notifications — not
+just as something the right people have to think to open a folder to check.
+
 ### Sequential vs parallel planning
 
-Two ways to lay out the same wave breakdown, chosen in Question 6. Every
+Two ways to lay out the same wave breakdown, chosen in Question 7 —
+independent of the local/repo choice above; all four combinations (local
+sequential, local parallel, repo sequential, repo parallel) are valid. Every
 other rule in this step (sizing, naming, the data model rule) applies
 identically in both — what changes is *grouping and ordering*, not scope
 per wave.
@@ -573,7 +644,12 @@ with no error. Use `RegisterX`, `NewX`, `OpenX`, `CommitX` instead.
 
 ## Step 3 — Write the wave specs
 
-One file per wave. Each file follows this structure:
+**Local mode:** one file per wave. **Repo mode:** one GitHub Issue per wave
+instead — same content and structure below, different destination; see
+"Repo planning mode" (Step 6) for the `gh` mechanics and
+`templates/issue-wave.md` for the issue-body form of this same template
+(identical, minus the redundant top header — the issue title carries
+`W<N> — <name>` instead). Each spec follows this structure:
 
 ```
 ## W<N> — <short name>
@@ -646,6 +722,7 @@ recipes.md now exists to prevent.
 - Quote every user-facing message verbatim. "Formato inválido. Envie um PDF." not "a validation message."
 - Mark every `Text` field that must be truly unbounded — Mentor silently creates them as `Text(50)` otherwise.
 - **Parallel mode only:** before finalizing a track's spec, check it against every other track's "Creates" list — if two tracks claim the same entity, action, or screen, that's a scoping error to fix now (move it to Foundation, or split ownership), not something to reconcile during execution.
+- **Repo + parallel mode only:** the `track:<name>` label on the issue is what filtering/claiming relies on — don't drop it in favor of the body's `**Track:**` line alone; both must agree.
 - The out-of-scope section must name what the previous wave owns (so Mentor cannot helpfully rebuild it) and what the next wave will own (so it does not build ahead).
 - Write a `§10 — If this wave stalls` section naming where to split the wave if Mentor times out (~30 min without a terminal state).
 
@@ -709,6 +786,10 @@ someone asks "how do you know" — see the wave execution cycle's Test step.
 ---
 
 ## Step 5 — Create execution-log.md
+
+**Local mode only.** In repo mode there is no `execution-log.md` — each
+wave's issue comments carry this same record instead; skip this step
+entirely and see "Repo planning mode" (Step 6) for the equivalent format.
 
 Create `execution-log.md` in the project folder alongside RUNBOOK.md.
 Seed it with the project header and an empty entry for W1:
@@ -786,14 +867,17 @@ the log entry on getting a precise number.
 The RUNBOOK is the operator's guide. It is generated once at plan creation and
 updated as waves execute. It contains:
 
-1. **Resumption pointer** — `## Current wave` updated to the active wave
-   before each fire. **Parallel mode:** replaced by a per-track table plus
-   the claim protocol below — there is no single "current wave" once more
-   than one track can be in progress at once.
-2. **Project facts** — tenant, app name, app key (resolved at session start, never hardcoded)
-3. **Wave table** — name, scope summary, committed vs deferred, status.
-   **Parallel mode:** grouped by track, with a `Track` column, plus the
-   `## Tracks` table (owner, scope, depends-on) from `templates/RUNBOOK.md`.
+1. **Resumption pointer** (local mode only — see item 12 for repo mode) —
+   `## Current wave` updated to the active wave before each fire.
+   **Local + parallel:** replaced by a per-track table plus the claim
+   protocol below — there is no single "current wave" once more than one
+   track can be in progress at once.
+2. **Project facts** — tenant, app name, app key (resolved at session start,
+   never hardcoded), and the planning location (local, or repo + `owner/repo`).
+3. **Wave table** (local mode only — see item 12 for repo mode) — name,
+   scope summary, committed vs deferred, status. **Local + parallel:**
+   grouped by track, with a `Track` column, plus the `## Tracks` table
+   (owner, scope, depends-on) from `templates/RUNBOOK.md`.
 4. **Living prototype pointer** — the Artifact URL of the cumulative HTML
    prototype (see "The prototype-first principle"), plus a one-line rule:
    no wave's Mentor prompt fires without an approved prototype screen for
@@ -816,12 +900,16 @@ updated as waves execute. It contains:
    carrying its own timestamp and an approximate token count (see
    `execution-log.md` format in Step 5)
 10. **Never list** — absolute prohibitions
-11. **Claim protocol** (parallel mode only) — see below; copy
+11. **Claim protocol** (local + parallel mode only) — see below; copy
     `templates/RUNBOOK.md`'s "Tracks" and "Claim protocol" sections in
-    verbatim, filling in the track table. In sequential mode, delete both
-    sections entirely — don't leave them as unused boilerplate.
+    verbatim, filling in the track table. In local + sequential mode,
+    delete both sections entirely — don't leave them as unused boilerplate.
+12. **Issue tracker** (repo mode only, replacing items 1 and 3) — see
+    "Repo planning mode" below; copy `templates/RUNBOOK.md`'s repo-mode
+    block verbatim, filling in the repo and label scheme. Delete items 1
+    and 3's sections entirely in this mode.
 
-### Tracks and the claim protocol (parallel mode only)
+### Tracks and the claim protocol (local + parallel mode only)
 
 This is the part of the RUNBOOK that makes "independent waves, same app"
 actually safe. It exists because of one fact that doesn't change no matter
@@ -865,6 +953,106 @@ rather than the fixed order a sequential plan would impose.
 
 Write this into the RUNBOOK's never list too: **never fire with a session
 or token older than the latest `execution-log.md` entry, from any track.**
+
+### Repo planning mode
+
+When Question 6 chose **repo**, there are no `spec-wN.md` files and no
+`execution-log.md`. Each wave is a GitHub Issue in the `owner/repo` named
+in Question 6, and the issue list itself — open/closed state, labels,
+comments — is what the local wave table, resumption pointer, and
+execution log would otherwise be.
+
+**One-time setup, before writing any issue** (verify, don't assume they
+already exist):
+
+```bash
+gh auth status
+gh repo view <owner>/<repo>
+gh label create outsystems-plan --repo <owner>/<repo> \
+  --color BFD4F2 --description "Wave from outsystems-plan skill" || true
+# Parallel mode only — one label per track:
+gh label create "track:foundation" --repo <owner>/<repo> --color D4C5F9 || true
+gh label create "track:a" --repo <owner>/<repo> --color C2E0C6 || true
+# Milestone groups every wave issue under this plan, even in a repo with
+# other, unrelated issues:
+gh api repos/<owner>/<repo>/milestones -f title="<Project Name>" || true
+```
+The trailing `|| true` on the label/milestone calls makes re-running this
+setup on an already-set-up repo a no-op instead of a failure — `gh` errors
+if the label/milestone already exists.
+
+**Creating a wave's issue** (replaces writing `spec-wN.md` — same content
+as `templates/spec-wave.md`/`templates/issue-wave.md`, just posted as an
+issue instead of saved as a file):
+
+```bash
+gh issue create --repo <owner>/<repo> \
+  --title "W1 — Foundation" \
+  --body-file <scratch file with the issue body> \
+  --label outsystems-plan \
+  --label "track:foundation" \
+  --milestone "<Project Name>"
+# Deferred waves also get: --label "status:deferred"
+```
+
+**Finding the next wave to fire** (replaces reading the local wave table):
+```bash
+gh issue list --repo <owner>/<repo> --label outsystems-plan --state open
+```
+Same ordering rule as local mode — Foundation before any track, lowest
+unclaimed wave ID within a track — just read from this list instead of a
+Markdown table.
+
+**Resuming the Mentor session** (replaces reading `execution-log.md`'s last
+entry):
+```bash
+gh issue list --repo <owner>/<repo> --label outsystems-plan --state closed \
+  --json number,closedAt --jq 'sort_by(.closedAt) | last | .number'
+gh issue view <that number> --repo <owner>/<repo> --json comments \
+  --jq '.comments[-1].body'
+```
+Resume from the **most recently closed issue's** last comment — by
+`closedAt`, not by wave number, since in parallel mode another track may
+have closed a later wave more recently than this track's own last one.
+Parse the `Session:` line out of that comment (same format as a local
+`execution-log.md` entry — see below).
+
+**Claiming a wave (parallel mode only — replaces the git commit/push claim
+protocol above with the issue's own assignee):**
+
+1. `gh issue view <number> --repo <owner>/<repo> --json assignees` — if
+   already assigned to someone else, don't fire; wait, or move to a
+   different ready wave in your own track.
+2. Re-resolve the live app revision and the latest session (above) — this
+   step is identical to local mode.
+3. `gh issue edit <number> --repo <owner>/<repo> --add-assignee @me` —
+   this is the claim. If it reports the issue is already assigned, someone
+   claimed it between steps 1 and 3 — recheck and pick a different wave.
+4. Run the normal six-step wave cycle.
+5. Close the wave (below) — a closed issue falls out of the "open, ready to
+   claim" pool, so closing is also what releases the claim.
+
+In sequential + repo mode, skip this claiming step entirely — there is only
+one person firing, so there is nothing to serialize.
+
+**Closing a wave** (replaces appending an `execution-log.md` entry):
+
+```bash
+gh issue comment <number> --repo <owner>/<repo> --body-file <comment file>
+gh issue close <number> --repo <owner>/<repo>
+```
+The comment uses the **exact same format** as a local `execution-log.md`
+entry (Step 5) — turn/deviation/fix/publish/gate/tests/status lines, each
+timestamped, plus the Session line. **The Session line is mandatory here
+too** — it's the only durable record of what the next wave, in any track,
+resumes from.
+
+**RUNBOOK.md in repo mode** has no `## Current wave`, `## Tracks`, or
+`## Wave plan` section (items 1 and 3 above) — replace them with a single
+`## Issue tracker` section: the repo link, the label scheme from the setup
+block above, and the `gh issue list`/`gh issue view` commands for finding
+the next wave and resuming the session. Copy `templates/RUNBOOK.md`'s
+repo-mode block verbatim.
 
 ### Mentor prompt guardrails
 
@@ -1042,8 +1230,10 @@ entry for yourself.
    reused blindly; start a fresh `mentor_start_session` +
    `mentor_load_asset` rather than attempting the old session id first.
 4. **What's actually done, and how you know** — which waves are complete,
-   and a one-line pointer to the execution-log.md entries proving it was
-   verified live (not just "Mentor reported 0 errors"). If the project
+   and a one-line pointer to the proof it was verified live (not just
+   "Mentor reported 0 errors"): the `execution-log.md` entries in local
+   mode, or the closed issues under the plan's milestone in repo mode. If
+   the project
    accumulated new lessons into `recipes.md`/`prototype-to-widgets.md`/
    `backend-and-data-gotchas.md` during this run, name them here so the
    next session doesn't have to diff the reference files to notice.
@@ -1093,3 +1283,9 @@ a short orientation document, not a second copy of the RUNBOOK.
       the `## Tracks` table and the `## Claim protocol` section filled in
       (not left as template placeholders); `execution-log.md`'s format
       includes the mandatory Session line
+- [ ] **Repo mode only:** `gh auth status` and `gh repo view` were verified
+      before the first issue was created; the `outsystems-plan` label (and
+      `track:*` labels, in parallel mode) and the project milestone exist;
+      every wave has an issue, titled and labeled per "Repo planning mode";
+      RUNBOOK has the `## Issue tracker` section, not the local wave
+      table/resumption pointer
