@@ -106,16 +106,25 @@ latest state," never "patch the difference in later."
 ## Issue tracker  *(repo mode only — delete this whole section in local mode; replaces "Current wave," "Tracks," "Claim protocol," and "Wave plan" above)*
 
 **Repo:** `owner/repo`
-**Labels:** `outsystems-plan` (every wave issue) · `track:<name>` (parallel mode only — one per track, e.g. `track:foundation`, `track:a`) · `status:deferred` (deferred waves)
+**Labels:** `outsystems-plan` (every wave issue) · `track:<name>` (parallel mode only — one per track, e.g. `track:foundation`, `track:a`) · `status:deferred` (deferred waves — a plan-time scheduling flag, unrelated to the Status field below)
 **Milestone:** `[Project Name]` — groups every wave issue under this plan
+**Project board:** `[Project Name]` — number `<project-number>` / id `<project-id>`
+**Status field:** id `<status-field-id>` — options: Todo `<option-id>` · In Progress `<option-id>` · In Review `<option-id>` · Done `<option-id>`
 
 One-time setup (idempotent — safe to re-run):
 ```bash
 gh auth status
+gh auth status | grep -q "'project'" || gh auth refresh -s project
 gh repo view owner/repo
 gh label create outsystems-plan --repo owner/repo --color BFD4F2 --description "Wave from outsystems-plan skill" || true
 gh api repos/owner/repo/milestones -f title="[Project Name]" || true
+gh project list --owner owner --format json --jq '.projects[] | select(.title=="[Project Name]") | .number'
+gh project create --owner owner --title "[Project Name]" --format json --jq '.number'   # only if the above printed nothing
+gh project field-list <project-number> --owner owner --format json --jq '.fields[] | select(.name=="Status")'
 ```
+A newly created board's Status field ships with Todo/In Progress/Done only —
+add an **In Review** option once via the Project UI if the team wants that
+stage, then re-run the `field-list` command and update the ids above.
 
 **Find the next wave to fire** (Foundation before any track; lowest unclaimed wave ID within a track):
 ```bash
@@ -140,12 +149,30 @@ gh issue edit <number> --repo owner/repo --add-assignee @me
 ```
 If already assigned, someone else claimed it first — pick a different ready wave.
 
+**Move a wave's status** ("move/mark/set it to In Progress/In Review/…" means
+this — a Project field edit, never a label):
+```bash
+# Add the issue to the board once, right after creating it:
+gh project item-add <project-number> --owner owner --url <issue-url>
+# Resolve its item id (once; reuse afterward):
+gh project item-list <project-number> --owner owner --format json \
+  --jq --arg n <issue-number> '.items[] | select(.content.number==($n|tonumber)) | .id'
+# Set Status to the matching option id from the table above:
+gh project item-edit --project-id <project-id> --id <item-id> \
+  --field-id <status-field-id> --single-select-option-id <option-id>
+```
+If the requested status has no matching option, stop and say so — add the
+option via the Project UI first, don't substitute a label or the closest
+existing option.
+
 **Close a wave** (replaces an `execution-log.md` entry — same format, as an
 issue comment, Session line mandatory):
 ```bash
 gh issue comment <number> --repo owner/repo --body-file <comment file>
 gh issue close <number> --repo owner/repo
 ```
+Closing also sets the Project item to its "Done"-equivalent status
+automatically on most boards — verify it landed there rather than assuming.
 
 ---
 
@@ -311,6 +338,7 @@ A rename can report success with a fresh revision and still have the old name de
 | (Parallel mode) Live revision doesn't match the latest `execution-log.md` entry | Something published since your last pull and the log is behind, or you're reading a stale local file. `git pull` again; if it still doesn't match, stop and reconcile before firing — do not guess which session/token is actually current. |
 | (Repo + parallel mode) An issue is assigned but its wave was never actually fired | A claim that got abandoned (dev switched tasks, session died mid-fire). Check with the assignee before unassigning (`gh issue edit <n> --remove-assignee <user>`) and re-claiming — don't assume a stale claim is free just because no comment followed it. |
 | (Repo mode) `gh issue create`/`comment`/`close` fails with a permissions error | `gh auth status` has drifted, or the token lacks `repo` scope. Re-authenticate (`gh auth login`) before continuing — do not fall back to writing a local file as a workaround, the plan's source of truth would then be split across two places. |
+| (Repo mode) `gh project` commands fail with a permissions/scope error | The token lacks the `project` scope (separate from `repo`) — run `gh auth refresh -s project`, then retry. |
 
 **Escalate to a stronger model when:** a wave fails twice; a gate result is ambiguous; a fix requires amending a spec; an invariant rule is in question.
 
@@ -362,6 +390,7 @@ and push this file as part of closing the wave.
 - **Parallel mode:** let two tracks' specs create or alter the same entity, action, or screen — fix the scoping before either fires, not after.
 - **Repo mode:** close a wave's issue without the Session line in the closing comment — it's the only durable record of what the next wave resumes from.
 - **Repo mode:** maintain a local `execution-log.md`/wave-table alongside the issue tracker "just in case" — pick one source of truth; a second one left around only drifts out of sync and gets trusted by mistake.
+- **Repo mode:** treat "move it to In Progress/In Review/…" as a label edit — it's the Project item's Status field; see "Move a wave's status" in the Issue tracker section.
 
 ---
 

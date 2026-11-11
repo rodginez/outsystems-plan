@@ -1,6 +1,6 @@
 ---
 name: outsystems-plan
-version: "0.18.0"
+version: "0.19.0"
 description: >
   Guides you from a blank folder to a complete OutSystems build plan through
   a short interactive interview. Reads your spec and reference screens, proposes
@@ -906,8 +906,8 @@ updated as waves execute. It contains:
     delete both sections entirely — don't leave them as unused boilerplate.
 12. **Issue tracker** (repo mode only, replacing items 1 and 3) — see
     "Repo planning mode" below; copy `templates/RUNBOOK.md`'s repo-mode
-    block verbatim, filling in the repo and label scheme. Delete items 1
-    and 3's sections entirely in this mode.
+    block verbatim, filling in the repo, label scheme, and Project board/
+    Status field ids. Delete items 1 and 3's sections entirely in this mode.
 
 ### Tracks and the claim protocol (local + parallel mode only)
 
@@ -967,6 +967,9 @@ already exist):
 
 ```bash
 gh auth status
+# The `project` scope is separate from `repo` and often missing on an
+# older token — check for it explicitly:
+gh auth status | grep -q "'project'" || gh auth refresh -s project
 gh repo view <owner>/<repo>
 gh label create outsystems-plan --repo <owner>/<repo> \
   --color BFD4F2 --description "Wave from outsystems-plan skill" || true
@@ -976,10 +979,29 @@ gh label create "track:a" --repo <owner>/<repo> --color C2E0C6 || true
 # Milestone groups every wave issue under this plan, even in a repo with
 # other, unrelated issues:
 gh api repos/<owner>/<repo>/milestones -f title="<Project Name>" || true
+# Project (v2) board — this is what "status" means in repo mode (see
+# "Status is the Project field, not a label" below). Create or reuse one
+# named after the project:
+gh project list --owner <owner> --format json \
+  --jq '.projects[] | select(.title=="<Project Name>") | .number'
+# ^ if this prints a number, reuse it as <project-number> below and skip
+#   `project create`. If it prints nothing, create one:
+gh project create --owner <owner> --title "<Project Name>" \
+  --format json --jq '.number'
+# Resolve the Status field's id and its options' ids once — every status
+# move below reuses these, so record them in RUNBOOK.md's Issue tracker
+# section rather than re-resolving them every time:
+gh project field-list <project-number> --owner <owner> --format json \
+  --jq '.fields[] | select(.name=="Status")'
 ```
 The trailing `|| true` on the label/milestone calls makes re-running this
 setup on an already-set-up repo a no-op instead of a failure — `gh` errors
-if the label/milestone already exists.
+if the label/milestone already exists. A newly created Project's Status
+field ships with **Todo / In Progress / Done** by default — if the team
+wants a distinct **In Review** stage, add that option once via the Project
+board's own UI (`gh` has no subcommand to add a single-select option to an
+existing field); re-run the `field-list` command above afterward to pick up
+its id.
 
 **Creating a wave's issue** (replaces writing `spec-wN.md` — same content
 as `templates/spec-wave.md`/`templates/issue-wave.md`, just posted as an
@@ -992,8 +1014,46 @@ gh issue create --repo <owner>/<repo> \
   --label outsystems-plan \
   --label "track:foundation" \
   --milestone "<Project Name>"
-# Deferred waves also get: --label "status:deferred"
+# Deferred waves also get: --label "status:deferred" — a plan-time
+# scheduling flag, unrelated to the Status field below (see next section).
 ```
+
+Then add the new issue to the Project board as an item — this is what
+makes its Status settable at all:
+
+```bash
+gh project item-add <project-number> --owner <owner> --url <issue-url>
+```
+
+### Status is the Project field, not a label
+
+**"Move the issue/wave to In Progress" (or In Review, Done, Todo, …) means
+set the Project item's `Status` single-select field — never add, remove, or
+rename a label for it.** Labels (`outsystems-plan`, `track:<name>`,
+`status:deferred`) are fixed categorization decided at planning time;
+`Status` is the one thing that is expected to change constantly as a wave
+moves through execution, and the Project board (plus anyone watching it) is
+exactly where that's meant to be visible. Treat an instruction phrased as
+"move," "mark," or "set" + a status word as a `Status` field edit; only an
+explicit "label it ..." is a label edit.
+
+**Setting an item's status** (the field id and option ids come from the
+one-time setup above — resolve the item id once per issue, then edit):
+
+```bash
+# Resolve this issue's item id inside the project (once; reuse afterward):
+gh project item-list <project-number> --owner <owner> --format json \
+  --jq --arg n <issue-number> '.items[] | select(.content.number==($n|tonumber)) | .id'
+
+# Set Status to the option whose name matches what was asked for:
+gh project item-edit --project-id <project-id> --id <item-id> \
+  --field-id <status-field-id> --single-select-option-id <option-id-for-that-status>
+```
+
+If the requested status name (e.g. "In Review") has no matching option on
+the board, **stop and tell the user** — add the option via the Project
+UI first (see the setup note above); don't silently fall back to a label
+or to the closest-sounding existing option.
 
 **Finding the next wave to fire** (replaces reading the local wave table):
 ```bash
@@ -1049,10 +1109,12 @@ resumes from.
 
 **RUNBOOK.md in repo mode** has no `## Current wave`, `## Tracks`, or
 `## Wave plan` section (items 1 and 3 above) — replace them with a single
-`## Issue tracker` section: the repo link, the label scheme from the setup
-block above, and the `gh issue list`/`gh issue view` commands for finding
-the next wave and resuming the session. Copy `templates/RUNBOOK.md`'s
-repo-mode block verbatim.
+`## Issue tracker` section: the repo link, the label scheme, the Project
+board number/id and Status field id + option ids resolved during setup
+(so a later status move never has to re-resolve them), and the `gh issue
+list`/`gh issue view`/`gh project item-edit` commands for finding the next
+wave, resuming the session, and moving a wave's status. Copy
+`templates/RUNBOOK.md`'s repo-mode block verbatim.
 
 ### Mentor prompt guardrails
 
@@ -1287,5 +1349,7 @@ a short orientation document, not a second copy of the RUNBOOK.
       before the first issue was created; the `outsystems-plan` label (and
       `track:*` labels, in parallel mode) and the project milestone exist;
       every wave has an issue, titled and labeled per "Repo planning mode";
-      RUNBOOK has the `## Issue tracker` section, not the local wave
-      table/resumption pointer
+      every issue was added as a Project item and its Status field is
+      Todo/In Progress/In Review/Done as appropriate, not tracked via a
+      label; RUNBOOK has the `## Issue tracker` section (repo, labels,
+      Project/Status ids), not the local wave table/resumption pointer
