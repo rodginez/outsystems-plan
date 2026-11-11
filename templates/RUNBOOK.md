@@ -14,10 +14,11 @@
 | App name | [app name] |
 | App key | _resolve with `app_list`_ |
 | Baseline | _measure before the first Mentor turn_ |
+| Planning mode | Sequential ← *or* Parallel (see corresponding section below) |
 
 ---
 
-## Current wave
+## Current wave  *(sequential mode — delete this whole section in parallel mode; use "Tracks" below instead)*
 
 **→ W___ — ___**  *(update this line each time you start a new wave)*
 
@@ -28,7 +29,82 @@ This is the resumption pointer. When returning to an interrupted session:
 
 ---
 
+## Tracks  *(parallel mode only — delete this whole section in sequential mode)*
+
+| Track | Owner | Scope | Depends on |
+|---|---|---|---|
+| Foundation | — | entities, theme, shell — closes the data model | — |
+| A | [dev name] | [module / screen group] | Foundation |
+| B | [dev name] | [module / screen group] | Foundation |
+
+**Rule:** no two tracks create or alter the same entity, action, or screen.
+A wave that needs something another track owns names it explicitly under
+that wave's spec "Consumes (must not alter)" section, including which
+track owns it (see `spec-wave.md`'s Track field).
+
+### Current wave per track
+
+This replaces the single resumption pointer sequential mode uses above —
+each track has its own next wave, but **only one wave fires against Mentor
+at a time, across every track.** See the Claim protocol below.
+
+| Track | → Current wave | Claimed by | Status |
+|---|---|---|---|
+| Foundation | W___ — ___ | — | — |
+| A | A___ — ___ | — | — |
+| B | B___ — ___ | — | — |
+
+---
+
+## Claim protocol  *(parallel mode only — delete this whole section in sequential mode)*
+
+The app, its live revision, and the Mentor session chain are **shared
+across every track** — there is one app, one live revision, and one
+`mentor_session_id`/`mentor_session_token` chain, no matter how many
+tracks are being planned or tested in parallel. Only one Mentor run can be
+in flight at all (`run_already_in_flight` is the platform enforcing this),
+and the session/token to resume from is whichever wave *most recently
+reached a terminal state* — not necessarily this track's own last wave.
+
+Before firing **any** wave, in **any** track:
+
+1. `git pull` — get every track's latest `RUNBOOK.md` and
+   `execution-log.md`, not just this track's own history.
+2. Re-resolve `app_list` / `env_app` and confirm the live revision matches
+   what `execution-log.md`'s most recent entry (from any track) recorded.
+   A mismatch means something published since your last pull — stop and
+   re-read that entry before doing anything else.
+3. Resume the Mentor session from **that** entry's `mentor_session_id` /
+   `mentor_session_token` — the most recent one in the whole log, never
+   assumed from this track's own last wave.
+4. Claim the wave: fill in "Claimed by" for this track's row above, commit,
+   push — **before firing**. A push rejected here means another track
+   claimed first; pull and recheck steps 2–3, then either wait or move to
+   a different ready wave in your own track.
+5. Run the normal six-step wave cycle (fire → poll → gate → publish →
+   compare → test) for this one wave.
+6. Append the `execution-log.md` entry — the Session line (final
+   `mentor_session_id`/`mentor_session_token`) is **mandatory**, not
+   optional, in parallel mode. Clear "Claimed by" back to `—`, commit, push
+   immediately. The next track's fire depends on seeing this pushed, not on
+   hearing about it out of band.
+
+**This makes git the lock, not a side effect of it.** The commit/push
+around firing is the actual mechanism serializing the team onto one shared
+Mentor session chain, in whatever order tracks are actually ready — not
+the fixed order a sequential plan would impose.
+
+**Never fire with a session or token older than the latest
+`execution-log.md` entry, from any track.** A wave built against a stale
+session can diverge from what's actually live, and there is no merge step
+to reconcile that afterward — the fix is always "re-fire from the real
+latest state," never "patch the difference in later."
+
+---
+
 ## Wave plan
+
+Sequential mode:
 
 | Wave | Name | Proves | Scope | Status |
 |---|---|---|---|---|
@@ -38,13 +114,25 @@ This is the resumption pointer. When returning to an interrupted session:
 | W… | Admin screens | CRUD for reference data | +2 screens | DEFERRED |
 | W… | Reporting | Dashboard and drilldown | +2 screens | DEFERRED |
 
+Parallel mode — add a `Track` column, grouped by track:
+
+| Track | Wave | Name | Proves | Scope | Status |
+|---|---|---|---|---|---|
+| Foundation | W1 | Foundation | Shell renders, seed data exists | entities, theme, 1 screen | — |
+| Foundation | W2 | … | … | … | — |
+| A | A1 | … | … | … | — |
+| A | A2 | … | … | … | — |
+| B | B1 | … | … | … | — |
+| B | B2 | … | … | … | DEFERRED |
+
 ---
 
 ## Per-wave procedure
 
-For each wave, in order:
+For each wave, in order (parallel mode: run the Claim protocol section
+above in place of step 0 — it supersedes updating a single pointer):
 
-**0. Update resumption pointer and record wave start**
+**0. Update resumption pointer and record wave start**  *(sequential mode)*
 
 Update the `## Current wave` line at the top of this file to the wave you
 are about to start. This is the first thing a new session reads to resume.
@@ -170,6 +258,8 @@ A rename can report success with a fresh revision and still have the old name de
 | A named block does not exist | The spec is wrong, not Mentor. Verify the real name with `context_search`, fix the spec, re-fire. |
 | Feature built but broken when clicked | This is what the whole plan exists to catch. Diagnose with `app_logs` / `db_query`, then fire a fix turn against the same wave. Do not proceed to the next wave. |
 | `run_already_in_flight` | Wait or cancel. Never fire a parallel run. |
+| (Parallel mode) `git push` rejected on the claim commit | Another track claimed first. `git pull`, re-check the claim protocol's steps 2–3 (live revision, latest session/token), then either wait for that track to finish or move to a different ready wave in your own track. |
+| (Parallel mode) Live revision doesn't match the latest `execution-log.md` entry | Something published since your last pull and the log is behind, or you're reading a stale local file. `git pull` again; if it still doesn't match, stop and reconcile before firing — do not guess which session/token is actually current. |
 
 **Escalate to a stronger model when:** a wave fails twice; a gate result is ambiguous; a fix requires amending a spec; an invariant rule is in question.
 
@@ -190,11 +280,15 @@ After each wave: append one entry. Format:
 - Gate: PASS
 - Tests: <N>/<N> pass
 - Status: DONE
+- [Parallel mode only, mandatory] Session: <mentor_session_id> / <mentor_session_token>
 ```
 
 Include deviation/fix lines only when something actually happened.
 Every timestamp from `date "+%H:%M:%S"` — never estimated.
 Write the entry once per wave, when the wave closes.
+**Parallel mode:** the Session line is not optional — it's what the next
+wave, in any track, resumes from (see the Claim protocol above). Commit
+and push this file as part of closing the wave.
 
 ---
 
@@ -212,6 +306,9 @@ Write the entry once per wave, when the wave closes.
 - Re-publish on a 404 `publish_status` — check `app_revisions` first.
 - Delegate fire-and-poll to a subagent. Subagents fabricate durations.
 - Trust a zero-artifact count on a seconds-old app — the Context Service indexes asynchronously.
+- **Parallel mode:** fire with a session/token older than the latest `execution-log.md` entry from *any* track — resume from the actual latest, never from this track's own last wave.
+- **Parallel mode:** skip the claim commit/push before firing — it's the only thing serializing the team onto one Mentor session chain.
+- **Parallel mode:** let two tracks' specs create or alter the same entity, action, or screen — fix the scoping before either fires, not after.
 
 ---
 

@@ -1,6 +1,7 @@
 # W<N> — [Wave name]
 
 **Wave N of M** · [committed / deferred]
+**Track:** [Foundation, or the track letter — delete this line entirely in sequential mode]
 
 ---
 
@@ -21,7 +22,9 @@
 - Screens: [list]
 
 **Consumes (must not alter):**
-- [list of artifacts from earlier waves]
+- [list of artifacts from earlier waves — in parallel mode, name the
+  owning track for each, e.g. "Entity Order — Foundation",
+  "Action RegisterOrder — Track A, wave A2"]
 
 **Data model changes:** none ← or describe exactly what changes
 

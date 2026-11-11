@@ -1,6 +1,6 @@
 ---
 name: outsystems-plan
-version: "0.15.0"
+version: "0.16.0"
 description: >
   Guides you from a blank folder to a complete OutSystems build plan through
   a short interactive interview. Reads your spec and reference screens, proposes
@@ -8,9 +8,13 @@ description: >
   verifiable, and generates RUNBOOK.md + one spec file per wave + Playwright
   test scaffolding. Every wave is prototyped in HTML and approved BEFORE Mentor
   ever touches it — the prototype, not ASCII art, is the screen's source of
-  truth. Use when starting a new OutSystems project or planning a new feature
-  set: "plan this project", "quebrar em ondas", "criar plano a partir do SDD",
-  "start planning".
+  truth. Supports two planning modes: sequential (one person, one ordered
+  wave list) and parallel (multiple developers, a shared Foundation phase
+  plus independent tracks with a git-based claim protocol so every track's
+  Mentor fire always resumes from the latest published state). Use when
+  starting a new OutSystems project or planning a new feature set:
+  "plan this project", "quebrar em ondas", "criar plano a partir do SDD",
+  "start planning", "split this into parallel tracks for my team".
 license: MIT
 allowed-tools: AskUserQuestion Bash Read Write Edit Artifact
 ---
@@ -36,6 +40,14 @@ tests/
 
 The skill produces the **plan**. Execution — firing Mentor, polling, publishing,
 running the tests — is the RUNBOOK's job.
+
+**Two planning modes** (chosen in Step 1, Question 6): **sequential** — one
+person, one ordered wave list, as above — or **parallel** — multiple
+developers, wave specs grouped into a shared Foundation phase plus
+independent tracks (`spec-a1.md`, `spec-b1.md`, …), with the RUNBOOK adding
+a claim protocol so every track's Mentor fire still resumes from whatever
+is actually the latest published state, team-wide. See "Sequential vs
+parallel planning" (Step 2) and "Tracks and the claim protocol" (Step 6).
 
 ---
 
@@ -354,23 +366,113 @@ This determines:
 - Whether the zero-screen, zero-action baseline needs to be measured first
 - Whether test user provisioning is needed
 
-### Question 6 — Confirm the wave proposal
+### Question 6 — Planning mode
 
-After answering questions 1–4, **propose the wave breakdown** before generating
+> "Will one person build this end to end, or will multiple developers work
+> on it at the same time? If multiple: roughly how many parallel
+> workstreams make sense, and do you already have a way you'd like to split
+> the app (by module, by screen group)? If you're not sure, say so — the
+> split can be proposed from the value path instead."
+
+This chooses between the two planning modes (see "Sequential vs parallel
+planning" in Step 2):
+
+- **One person, or unsure** → **sequential** (default). Nothing below
+  changes; this is the mode the rest of this skill has always used.
+- **Multiple developers, genuinely in parallel** → **parallel**. The wave
+  breakdown in Question 7 is then proposed as a shared Foundation phase
+  followed by independent tracks, and the generated RUNBOOK includes the
+  claim protocol (Step 6) instead of a single resumption pointer.
+
+Don't default to parallel just because a team *could* grow later — picking
+it commits every wave spec to naming a track and every fire to the claim
+protocol's overhead. If the team is one person today, plan sequential and
+revisit this question if headcount actually changes.
+
+### Question 7 — Confirm the wave proposal
+
+After answering questions 1–6 (the planning mode from Question 6 decides
+whether this is a single list or a Foundation-plus-tracks split), **propose
+the wave breakdown** before generating
 any files. Show for each wave:
 - What the user will be able to click and see
 - The single sentence that describes what the wave proves
 - Approximate scope (entities created, actions, screens)
+- **In parallel mode:** which track it belongs to (Foundation, or a named
+  track), and what that track depends on from Foundation or another track
 
 Then ask:
 > "Does this breakdown look right? Any wave too large, too small, or in the
-> wrong order?"
+> wrong order?" (sequential mode)
+>
+> "Does this track split look right? Any wave in the wrong track, any
+> cross-track dependency missing, any track too big for one person to own?"
+> (parallel mode)
 
 Adjust based on feedback. Only generate files after this is confirmed.
 
 ---
 
 ## Step 2 — Derive the waves
+
+### Sequential vs parallel planning
+
+Two ways to lay out the same wave breakdown, chosen in Question 6. Every
+other rule in this step (sizing, naming, the data model rule) applies
+identically in both — what changes is *grouping and ordering*, not scope
+per wave.
+
+**Why parallel can't just mean "ignore order":** every wave still fires
+against the same one Mentor session chain, the same one app, the same one
+live revision. There is no merge step for two people's Mentor builds — the
+platform has no concept of a branch. What parallel mode actually buys a
+team is independent *planning, speccing, prototyping, and test-writing*,
+plus the freedom to fire whichever track's next wave is ready first instead
+of a single fixed order. The build step itself stays serialized, team-wide
+— see the claim protocol in Step 6.
+
+**Sequential (default):** one flat, ordered list — `W1, W2, W3, …` — exactly
+as described below. Use this whenever one person is building, or the team
+hasn't committed to genuine parallel work yet.
+
+**Parallel:** the wave list splits into a shared **Foundation** phase
+followed by independent **tracks**:
+
+```
+Foundation   W1, W2, …   theme, shell, reference data seed, every entity
+                         the value path needs (see Data model rule below)
+                         — same role as sequential W1–W2, just named
+                         explicitly as the thing every track depends on
+Track A      A1, A2, …   one module/screen-group, owned by one developer
+Track B      B1, B2, …   a different module/screen-group, owned by another
+Track …      …
+```
+
+Rules specific to parallel mode:
+
+- **Foundation is still sequential and still comes first.** No track's
+  wave 1 fires until Foundation's waves are published — tracks depend on
+  a data model and shell that already exist, not one each proposes itself.
+- **No two tracks may create or alter the same entity, action, or screen.**
+  This is the independence the whole mode depends on — if two tracks need
+  to touch the same artifact, either it belongs in Foundation instead, or
+  one track owns it and the other consumes it read-only (name this
+  explicitly — see Step 3's Track field).
+- **Size tracks to the team, not the module boundaries.** Two or three
+  tracks for two or three developers. A track one person can't plausibly
+  keep in their head alongside everyone else's isn't smaller work, it's
+  just unowned — split it, or merge it into another track, before
+  generating specs.
+- **Wave IDs are `<TrackLetter><n>`** (`A1`, `A2`, `B1`, …) for track waves,
+  and plain `W<n>` for Foundation waves — this keeps the two kinds visually
+  distinct in specs, file names (`spec-a1.md` vs `spec-w1.md`), and the
+  execution log, and avoids renumbering Foundation if a track's wave count
+  changes later.
+- **Admin/reporting waves (see "the shape that usually emerges" below)
+  are almost always their own track**, not folded into whichever track
+  happens to own the entity they manage — they're exactly the kind of
+  work with few cross-track reads, which is what makes a track worth
+  splitting out in the first place.
 
 ### Sizing rule
 
@@ -416,6 +518,8 @@ to catch before a spec gets written.
 
 ### The shape that usually emerges
 
+Sequential mode:
+
 ```
 W1  Foundation     theme, shell, reference data seed, the first screen (layout only)
 W2  First feature  data loads in that screen; create form exists and validates
@@ -426,14 +530,27 @@ W6+ Admin          CRUD for reference data the seed populated in W1
 W…  Reporting      aggregates and dashboards
 ```
 
-Commit to building through the last value-path wave. Mark admin and reporting
-waves as **DEFERRED** — write their specs anyway, mark them clearly, exclude
-them from the initial test run.
+Parallel mode, same project, two developers:
+
+```
+W1    Foundation   theme, shell, reference data seed, every value-path entity
+W2    Foundation   (closes the data model — see Data model rule)
+A1-A3 Track A      the value-path screens (first feature → core action → commit)
+B1-B2 Track B      admin CRUD for the seed data + reporting
+```
+
+Commit to building through the last value-path wave/track. Mark admin and
+reporting waves (or the whole track that holds them) as **DEFERRED** — write
+their specs anyway, mark them clearly, exclude them from the initial test run.
 
 ### Data model rule
 
-Create all entities needed for the value path by the end of W2. Later waves
-add logic and screens only, never new entities. This lets every wave spec say
+Create all entities needed for the value path by the end of the Foundation
+phase (W2 in sequential mode — there is no separate Foundation phase there,
+it's just the first two waves). Waves after Foundation add logic and screens
+only, never new entities — in parallel mode this applies to every track
+equally, which is what makes "no two tracks touch the same entity" a static
+fact to check rather than a moving target. This lets every wave spec say
 "no data model changes" — a verifiable gate.
 
 ### Naming user-defined actions
@@ -451,12 +568,16 @@ One file per wave. Each file follows this structure:
 ```
 ## W<N> — <short name>
 
+**Track:** [Foundation, or the track letter — omit this line entirely in sequential mode]
+
 ### What this wave proves
 One sentence. What can a human do and verify after this wave is published?
 
 ### Scope
 - Creates: [entity list, action list, screen list]
-- Consumes (must not alter): [what earlier waves built]
+- Consumes (must not alter): [what earlier waves built — in parallel mode,
+  name the owning track for each item, e.g. "Entity Order — Foundation",
+  "Action RegisterOrder — Track A, wave A2"]
 - No data model changes: [yes/no]
 
 ### Screen layout
@@ -512,6 +633,7 @@ recipes.md now exists to prevent.
 
 - Quote every user-facing message verbatim. "Formato inválido. Envie um PDF." not "a validation message."
 - Mark every `Text` field that must be truly unbounded — Mentor silently creates them as `Text(50)` otherwise.
+- **Parallel mode only:** before finalizing a track's spec, check it against every other track's "Creates" list — if two tracks claim the same entity, action, or screen, that's a scoping error to fix now (move it to Foundation, or split ownership), not something to reconcile during execution.
 - The out-of-scope section must name what the previous wave owns (so Mentor cannot helpfully rebuild it) and what the next wave will own (so it does not build ahead).
 - Write a `§10 — If this wave stalls` section naming where to split the wave if Mentor times out (~30 min without a terminal state).
 
@@ -616,6 +738,7 @@ Then append one entry in this exact format — nothing more:
 - [HH:MM:SS] Tests: <N>/<N> pass [(<IDs> deferred — <reason>)]
 - [HH:MM:SS] Status: DONE | BLOCKED (<reason>)
 - Wave tokens: ~<sum of turn tokens> tok
+- [Parallel mode only] Session: <mentor_session_id> / <mentor_session_token> — whoever fires the next wave, in any track, resumes from this line, not from their own track's last entry
 ```
 
 Lines in `[brackets after the timestamp]` are optional — include only when
@@ -635,6 +758,10 @@ the log entry on getting a precise number.
 - Gate verdict and test result
 - Known gaps that carry forward
 - A timestamp on every line, and a per-wave token subtotal
+- **Parallel mode:** the Session line is not optional — it's the only
+  durable record of what the next wave (in any track) must resume from.
+  Commit and push `execution-log.md` as part of closing the wave, not
+  as a separate step — see the claim protocol in Step 6.
 
 **What does not belong:**
 - Intermediate poll results
@@ -647,9 +774,14 @@ the log entry on getting a precise number.
 The RUNBOOK is the operator's guide. It is generated once at plan creation and
 updated as waves execute. It contains:
 
-1. **Resumption pointer** — `## Current wave` updated to the active wave before each fire
+1. **Resumption pointer** — `## Current wave` updated to the active wave
+   before each fire. **Parallel mode:** replaced by a per-track table plus
+   the claim protocol below — there is no single "current wave" once more
+   than one track can be in progress at once.
 2. **Project facts** — tenant, app name, app key (resolved at session start, never hardcoded)
-3. **Wave table** — name, scope summary, committed vs deferred, status
+3. **Wave table** — name, scope summary, committed vs deferred, status.
+   **Parallel mode:** grouped by track, with a `Track` column, plus the
+   `## Tracks` table (owner, scope, depends-on) from `templates/RUNBOOK.md`.
 4. **Living prototype pointer** — the Artifact URL of the cumulative HTML
    prototype (see "The prototype-first principle"), plus a one-line rule:
    no wave's Mentor prompt fires without an approved prototype screen for
@@ -672,6 +804,55 @@ updated as waves execute. It contains:
    carrying its own timestamp and an approximate token count (see
    `execution-log.md` format in Step 5)
 10. **Never list** — absolute prohibitions
+11. **Claim protocol** (parallel mode only) — see below; copy
+    `templates/RUNBOOK.md`'s "Tracks" and "Claim protocol" sections in
+    verbatim, filling in the track table. In sequential mode, delete both
+    sections entirely — don't leave them as unused boilerplate.
+
+### Tracks and the claim protocol (parallel mode only)
+
+This is the part of the RUNBOOK that makes "independent waves, same app"
+actually safe. It exists because of one fact that doesn't change no matter
+how the wave plan is organized: **the app, its live revision, and the
+Mentor session chain are shared across every track.** Only one Mentor run
+can be in flight at all (`run_already_in_flight` is the platform enforcing
+this), and `mentor_session_id`/`mentor_session_token` chain from whatever
+wave most recently reached a terminal state — not from "this track's own
+last wave." A dev on Track B who fires against their own track's last
+session token while Track A has published something more recent will be
+building against a state that's already stale, with no merge step to
+reconcile it afterward.
+
+So the claim protocol is the thing that makes "ensure Mentor always works
+with the latest deployed version" hold even though multiple devs are
+planning and prototyping independently. Mechanically, before firing *any*
+wave in *any* track:
+
+1. `git pull` — every track's `RUNBOOK.md` and `execution-log.md` updates,
+   not just this track's own history.
+2. Re-resolve `app_list` / `env_app` and confirm the live revision matches
+   what `execution-log.md`'s most recent entry (from any track) recorded.
+   A mismatch means something published since the last pull — stop and
+   re-read that entry before doing anything else.
+3. Resume the Mentor session from *that* entry's `mentor_session_id` /
+   `mentor_session_token` — the most recent one in the whole log, never
+   assumed from this track's own last wave.
+4. Claim: update this track's row in the per-track table, commit, push —
+   *before* firing. A push rejected here means another track claimed
+   first; pull and recheck steps 2–3.
+5. Run the normal six-step wave cycle (fire → poll → gate → publish →
+   compare → test).
+6. Append the `execution-log.md` entry (Session line mandatory — Step 5),
+   clear this track's claim, commit, push immediately. The next track to
+   fire depends on seeing this pushed, not on hearing about it out of band.
+
+**This makes git the lock**, not a side effect of it — a wave's commit/push
+around firing is the actual mechanism that serializes the team onto one
+shared Mentor session chain, in whatever order tracks are actually ready,
+rather than the fixed order a sequential plan would impose.
+
+Write this into the RUNBOOK's never list too: **never fire with a session
+or token older than the latest `execution-log.md` entry, from any track.**
 
 ### Mentor prompt guardrails
 
@@ -885,3 +1066,8 @@ a short orientation document, not a second copy of the RUNBOOK.
 - [ ] Each spec has a split point for if it stalls
 - [ ] Test IDs in specs match the `.spec.ts` files exactly
 - [ ] RUNBOOK has the failure playbook and never list
+- [ ] **Parallel mode only:** every wave spec names its track; no two tracks'
+      "Creates" lists overlap on an entity, action, or screen; RUNBOOK has
+      the `## Tracks` table and the `## Claim protocol` section filled in
+      (not left as template placeholders); `execution-log.md`'s format
+      includes the mandatory Session line
